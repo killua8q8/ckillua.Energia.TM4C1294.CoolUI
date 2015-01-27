@@ -11,7 +11,7 @@ struct sPacket rxPacket;
 // UI related elements
 Screen_K35 myScreen;
 button homeButton;
-imageButton optionButton, nextButton, returnButton;
+imageButton optionButton, nextButton, returnButton, updateButton;
 item home_i, option_i;
 roomStruct room_l[MAXROOMSIZE];
 childStruct child_l[MAXCHILDSIZE];
