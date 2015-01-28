@@ -18,7 +18,7 @@ extern const uint8_t g_upImage[];
 extern const uint8_t g_bgImage[];
 extern const uint8_t g_optionImage[];
 extern const uint8_t g_timebarImage[];
-//extern const uint8_t g_addImage[];
+extern const uint8_t g_addImage[];
 extern const uint8_t g_setTimeImage[];
 extern const uint8_t g_pairSlaveImage[];
 extern const uint8_t g_pairChildImage[];

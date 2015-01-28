@@ -175,13 +175,51 @@ void home() {
   
 }
 
+boolean childConfig(roomStruct room) {
+  
+  uint8_t count = 0;
+  
+  uiBackground();
+  updateTime(true);
+  
+  for (int i = 0; i < room.childSize; i++) {
+    room.childList[i].button.draw();
+    count++;
+  }
+  returnButton.dDefine(&myScreen, g_returnImage, xy[count][0], xy[count][1], setItem(100, "RETURN"));
+  returnButton.enable();
+  returnButton.draw();
+  
+  while(1) {
+    updateTime(true);
+    if (homeButton.isPressed()) {
+      return HOME;
+    }
+    if (returnButton.check(true)) {
+       return RETURN; 
+    }
+  }
+  
+  //TODO: control children
+}
+
 void roomConfig(roomStruct room) {
   resetRoomConfigUI(room);
   while (1) {
     updateTime(true);
     if (returnButton.check(true) || homeButton.isPressed()) {
       return;
-    } 
+    }
+    if (updateButton.check(true)) {
+      updateRoomInfo(room);
+    }
+    if (optionButton.check(true)) {
+      if (childConfig(room)) {
+        return;
+      } else {
+        resetRoomConfigUI(room);
+      }
+    }
   }
 }
 
@@ -191,13 +229,17 @@ void resetRoomConfigUI(roomStruct room) {
   uiBackground();
   updateRoomInfo(room);
   updateTime(true);
-  /*
-  for (int i = 0; i < room.childSize; i++) {
-    room.childList[i].button.draw();
-    count++;
-  }
-  */
-  returnButton.dDefine(&myScreen, g_returnImage, xy[count][0], xy[count][1], setItem(100, "RETURN"));
+  
+  // TODO: Need g_updateImage 
+  updateButton.dDefine(&myScreen, g_addImage, xy[count][0], xy[count][1], setItem(100, "UPDATE"));
+  updateButton.enable();
+  updateButton.draw();
+
+  optionButton.dDefine(&myScreen, g_optionImage, xy[count+1][0], xy[count+1][1], setItem(100, "Option"));
+  optionButton.enable();
+  optionButton.draw();
+  
+  returnButton.dDefine(&myScreen, g_returnImage, xy[count+2][0], xy[count+2][1], setItem(100, "RETURN"));
   returnButton.enable();
   returnButton.draw();
   
@@ -209,15 +251,22 @@ void updateRoomInfo(roomStruct room) {
   myScreen.setFontSize(3);
   myScreen.gText(x + 45, y + 20, room.name, true);
   if (room.type == MASTER) {
-  /***************************
-    get temperature from children
-  ***************************/    
+    if (room.childSize > 0) {
+      /***************************
+      TODO: get temperature from children
+      ***************************/
+    }
+    uint8_t localTemp = getLocalTemp();
   } else {
   /***************************
-    get temperature from slave
+  TODO: get temperature from slave
   ***************************/    
   }
   myScreen.gText(x + 177,y + 20, String(temp) + (char)0xB0 + "F", true);
+}
+
+uint8_t getLocalTemp() {
+  // TODO: Return calculated local temp 
 }
 
 void uiBackground() {
