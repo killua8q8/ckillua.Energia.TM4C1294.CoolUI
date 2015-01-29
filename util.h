@@ -18,7 +18,7 @@ extern const uint8_t g_upImage[];
 extern const uint8_t g_bgImage[];
 extern const uint8_t g_optionImage[];
 extern const uint8_t g_timebarImage[];
-extern const uint8_t g_addImage[];
+//extern const uint8_t g_addImage[];
 extern const uint8_t g_setTimeImage[];
 extern const uint8_t g_pairSlaveImage[];
 extern const uint8_t g_pairChildImage[];
@@ -33,6 +33,7 @@ extern const uint8_t g_fanImage[];
 extern const uint8_t g_blindImage[];
 extern const uint8_t g_ventImage[];
 extern const uint8_t g_infoImage[];
+extern const uint8_t g_updateImage[];
 
 const String nameEmpty = "Name cannot be empty";
 const String roomNameRepeat = "Room name existed";
