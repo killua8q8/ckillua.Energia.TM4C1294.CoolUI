@@ -5,30 +5,37 @@
 #include <LCD_GUI.h>
 #include "util.h"
 
-#define ADDRESS_LOCAL 0x01
+#define ADDRESS_PAIR 0x00
+#define ADDRESS_SLAVEBASE 0x0F
+#define ADDRESS_CHILDBASE 0x5F
+#define DEBUG true
 struct sPacket rxPacket;
+struct sPacket txPacket;
 
 // UI related elements
 Screen_K35 myScreen;
 button homeButton;
 imageButton optionButton, nextButton, returnButton, updateButton;
 item home_i, option_i;
+
+// System main vars
+String deviceName;
+boolean firstInitialized = false;
+boolean isMaster = true;
 roomStruct room_l[MAXROOMSIZE];
 childStruct child_l[MAXCHILDSIZE];
-uint8_t roomSize = 0;
+uint8_t roomSize = 0, childrenNodeCount = ADDRESS_CHILDBASE, roomNodeCount = ADDRESS_SLAVEBASE;
+uint8_t ADDRESS_LOCAL;
 
 // System time vars
 int8_t hour = 0, minute = 0, second = 0;
 long recordMillis = 0, leftover = 0;
 
-// other vars
-String deviceName;
-boolean firstInitialized = false;
-
 void setup()
 {
   // start serial communication at 115200 baud
   Serial.begin(115200);
+  ADDRESS_LOCAL = 0x01;
   initAIR();
   initLCD();
   opening();
@@ -102,7 +109,7 @@ void timeSet() {
   
   while (1) {
     if (timeSetOK.isPressed()) {
-      Serial.println("Time set " + String(hour) + ":" + String(minute) + ":" + String(second));
+      debug("Time set " + String(hour) + ":" + String(minute) + ":" + String(second));
       recordMillis = millis();
       return;
     }
@@ -147,7 +154,7 @@ void timeSet() {
 }
 
 void initUI() {
-  Serial.println("Init UI");
+  debug("Init UI");
   uiBackground();
   updateTime(true);
   
@@ -231,7 +238,7 @@ void resetRoomConfigUI(roomStruct room) {
   updateTime(true);
   
   // TODO: Need g_updateImage 
-  updateButton.dDefine(&myScreen, g_addImage, xy[count][0], xy[count][1], setItem(100, "UPDATE"));
+  updateButton.dDefine(&myScreen, g_updateImage, xy[count][0], xy[count][1], setItem(100, "UPDATE"));
   updateButton.enable();
   updateButton.draw();
 
@@ -285,10 +292,10 @@ void updateTime(boolean flag) {
 
   recordMillis = millis();
   leftover = dTime - floor(dTime/1000)*1000;
-  //Serial.println(dTime);
+  //debug(dTime);
   
   tempS = second + dTime/1000;
-  //Serial.println(String("temps : ") + tempS);
+  //debug(String("temps : ") + tempS);
   
   if (tempS > 59) {
     minute += tempS/60;
@@ -343,11 +350,11 @@ void option() {
   while (1) {
     updateTime(true);
     if (homeButton.isPressed()) {
-      Serial.println("Home is pressed");
+      debug("Home is pressed");
       return;
     }
     if (setTimeButton.check(true)) {
-      Serial.println("Set Time is pressed");
+      debug("Set Time is pressed");
       timeSet();
       restOption(setTimeButton, pairSlaveButton, pairChildButton);
     }
@@ -359,7 +366,7 @@ void option() {
       }
     }
     if (pairChildButton.check(true)) {
-      Serial.println("Pair Child is pressed");
+      debug("Pair Child is pressed");
       if (pairChild(&room_l[0])) {
         return;
       } else {
@@ -367,7 +374,7 @@ void option() {
       }
     }
     if (returnButton.check(true)) {
-      Serial.println("Return from Option");
+      debug("Return from Option");
       return; 
     }
   }  
@@ -449,6 +456,7 @@ void newRoom(String name) {
     *************************/
     room_l[roomSize].type = SLAVE;
   } else {
+    room_l[roomSize].node = ADDRESS_LOCAL;
     room_l[roomSize].type = MASTER; 
   }
   roomSize++;
@@ -482,21 +490,21 @@ boolean pairChild(roomStruct *room) {
   while(1) {
     updateTime(true);
     if (homeButton.isPressed()) {
-      Serial.println("Home is pressed");
+      debug("Home is pressed");
       return HOME;
     }
     if (returnButton.check(true)) {
-      Serial.println("Return is pressed");
+      debug("Return is pressed");
       return RETURN;
     }
     if (pairFan.check(true)) {
-      if (newChild(room, NEWFAN) == HOME) return HOME;
+      if (newChild(room, NEWFAN)) return HOME;
     }
     if (pairVent.check(true)) {
-      if (newChild(room, NEWVENT) == HOME) return HOME;
+      if (newChild(room, NEWVENT)) return HOME;
     }
     if (pairBlind.check(true)) {
-      if (newChild(room, NEWBLIND) == HOME) return HOME;
+      if (newChild(room, NEWBLIND)) return HOME;
     }
   }
 }
@@ -540,7 +548,7 @@ boolean newChild(roomStruct *room, uint8_t type) {
           } else {
             if (type == NEWFAN) {
               addChild(room, name, FAN, g_fanImage);
-              Serial.println("FAN added");
+              debug("FAN added");
             } else if (type == NEWVENT) {
               addChild(room, name, VENT, g_ventImage);
             } else if (type == NEWBLIND) {
@@ -581,13 +589,20 @@ void addChild(roomStruct *room, String name, child_t type, const uint8_t *icon) 
   room->childList[childSize].type = type;
   room->childList[childSize].button.define(&myScreen, icon, xy[position][0], xy[position][1], name);
   room->childList[childSize].button.enable();
-  /********************
-  pair child
-  room->childList[childSize].node = 0;
-  ********************/
-  room->childSize++;
-  
-  
+  /********************/
+  setRadioPairing();
+  String msg = "parent " + String(ADDRESS_LOCAL) + " node " + String(ADDRESS_CHILDBASE) + " type " + getChildTypeString(room->childList[childSize].type);
+  txPacket.node = ADDRESS_LOCAL;
+  msg.toCharArray((char*)txPacket.msg, 59);  
+  boolean confirm = false;
+  do {
+    Radio.transmit(ADDRESS_CHILDBASE, (unsigned char*)&txPacket, sizeof(txPacket));
+  } while(Radio.receiverOn((unsigned char*)&rxPacket, sizeof(rxPacket), 5000) <= 0);
+  setRadioTransceiving();
+  room->childList[childSize].node = rxPacket.node;
+  debug("connection made to node: " + String(rxPacket.node));
+  /********************/
+  room->childSize++;  
 }
 
 boolean isEmpty(String s) {
@@ -739,6 +754,7 @@ void initAIR() {
   Radio.begin(ADDRESS_LOCAL, CHANNEL_1, POWER_MAX);
   rxPacket.node = 0;
   memset(rxPacket.msg, 0, sizeof(rxPacket.msg));
+  memset(txPacket.msg, 0, sizeof(txPacket.msg));
 }
 
 void initLCD() {
@@ -753,4 +769,36 @@ void opening() {
   myScreen.drawImage(g_logoImage, 0, 0);
   delay(5000);
   myScreen.clearScreen();
+}
+
+void debug(String s) {
+  if (DEBUG)
+    Serial.println(s);
+}
+
+String getChildTypeString(child_t type) {
+  switch (type) {
+    case VENT:
+      return "vent";
+      break;
+    case FAN:
+      return "fan";
+      break;
+    case BLIND:
+      return "blind";
+      break;
+    default:
+      return "";
+      break;
+  } 
+}
+
+void setRadioPairing() {
+  Radio.setAddress(ADDRESS_PAIR);
+//  Radio.setChannel(CHANNEL_4);
+}
+
+void setRadioTransceiving() {
+  Radio.setAddress(ADDRESS_LOCAL);
+//  Radio.setChannel(CHANNEL_1);
 }
