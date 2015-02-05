@@ -13,7 +13,7 @@ struct sPacket txPacket;
 // UI related elements
 Screen_K35 myScreen;
 button homeButton;
-imageButton optionButton, nextButton, returnButton, updateButton;
+imageButton optionButton, nextButton, returnButton, updateButton, removeButton, onButton, offButton;
 item home_i, option_i;
 
 // System main vars
@@ -48,7 +48,7 @@ void loop()
   }
   for (int i = 0; i < roomSize; i++) {
     if (room_l[i].button.check(true)) {
-      roomConfig(room_l[i]);
+      roomConfig(&room_l[i]);
       home();
     } 
   }
@@ -178,18 +178,20 @@ void home() {
   
 }
 
-boolean childConfig(roomStruct room) {
-  
+boolean childControl(roomStruct* room, childStruct child, uint8_t index) {
   uint8_t count = 0;
-  
   uiBackground();
   updateTime(true);
-  
-  for (int i = 0; i < room.childSize; i++) {
-    room.childList[i].button.draw();
-    count++;
-  }
-  returnButton.dDefine(&myScreen, g_returnImage, xy[count][0], xy[count][1], setItem(100, "RETURN"));
+  onButton.dDefine(&myScreen, g_onImage, xy[count][0], xy[count++][1], setItem(100, "ON"));
+  onButton.enable();
+  onButton.draw();
+  offButton.dDefine(&myScreen, g_offImage, xy[count][0], xy[count++][1], setItem(100, "OFF"));
+  offButton.enable();
+  offButton.draw();
+  removeButton.dDefine(&myScreen, g_removeImage, xy[count][0], xy[count++][1], setItem(100, "REMOVE"));
+  removeButton.enable();
+  removeButton.draw();
+  returnButton.dDefine(&myScreen, g_returnImage, xy[count][0], xy[count++][1], setItem(100, "RETURN"));
   returnButton.enable();
   returnButton.draw();
   
@@ -199,14 +201,85 @@ boolean childConfig(roomStruct room) {
       return HOME;
     }
     if (returnButton.check(true)) {
+      return RETURN; 
+    }
+    if (onButton.check(true)) {
+      childCommand(child, "ON");
+    }
+    if (offButton.check(true)) {
+      childCommand(child, "OFF");
+    }
+    if (removeButton.check(true)) {
+      childCommand(child, "DEL");
+      removeChild(room, index);
+      return RETURN;
+    }
+  }
+}
+
+void removeChild(roomStruct* room, uint8_t index) {
+  if (index == room->childSize-1) {
+    ;
+  } else {
+    for (int i = 0; i < room->childSize; i++) {
+      if (i == index++) {
+        room->childList[i] = room->childList[index];
+      }
+    }
+  }
+  room->childSize--;
+}
+
+void childCommand(childStruct child, char* cmd) {
+  strcpy((char*)txPacket.msg, cmd);
+  Radio.transmit(child.node, (unsigned char*)&txPacket, sizeof(txPacket));
+  while(Radio.busy()){}
+  if (Radio.receiverOn((unsigned char*)&rxPacket, sizeof(rxPacket), 5000) <= 0) {
+    // Failed connection
+    debug("No ACK from node " + String(rxPacket.node));
+    return;
+  }
+  // Below happens when successful connected
+  if (!strcmp((char*)rxPacket.msg, "ACK")) {
+    debug("ACK from node " + String(rxPacket.node));
+  }
+}
+
+boolean childConfig(roomStruct* room) {
+  resetChildConfigUI(room);
+  while(1) {
+    updateTime(true);
+    if (homeButton.isPressed()) {
+      return HOME;
+    }
+    if (returnButton.check(true)) {
        return RETURN; 
+    }
+    for (int i = 0; i < room->childSize; i++) {
+      if (room->childList[i].button.check(true)) {
+        if (childControl(room, room->childList[i], i)) return HOME;
+        resetChildConfigUI(room);
+      }
     }
   }
   
   //TODO: control children
 }
 
-void roomConfig(roomStruct room) {
+void resetChildConfigUI(roomStruct* room) {
+  uint8_t count = 0;  
+  uiBackground();
+  updateTime(true);  
+  for (int i = 0; i < room->childSize; i++) {
+    room->childList[i].button.draw();
+    count++;
+  }
+  returnButton.dDefine(&myScreen, g_returnImage, xy[count][0], xy[count][1], setItem(100, "RETURN"));
+  returnButton.enable();
+  returnButton.draw();
+}
+
+void roomConfig(roomStruct* room) {
   resetRoomConfigUI(room);
   while (1) {
     updateTime(true);
@@ -226,7 +299,7 @@ void roomConfig(roomStruct room) {
   }
 }
 
-void resetRoomConfigUI(roomStruct room) {
+void resetRoomConfigUI(roomStruct* room) {
   uint8_t count = 3;
   
   uiBackground();
@@ -248,18 +321,32 @@ void resetRoomConfigUI(roomStruct room) {
   
 }
 
-void updateRoomInfo(roomStruct room) {
-  uint8_t temp = 0, x = 28, y = 60;
+void updateRoomInfo(roomStruct* room) {
+  uint8_t x = 28, y = 60, count = 0;
+  uint16_t temp = 0;
   myScreen.drawImage(g_infoImage, x, y);
   myScreen.setFontSize(3);
-  myScreen.gText(x + 45, y + 20, room.name, true);
-  if (room.type == MASTER) {
-    if (room.childSize > 0) {
-      /***************************
-      TODO: get temperature from children
-      ***************************/
+  myScreen.gText(x + 45, y + 20, room->name, true);
+  if (room->type == MASTER) {
+    if (room->childSize > 0) {
+      strcpy((char*)txPacket.msg, "TEMP");
+      for (int i = 0; i < room->childSize; i++) {
+        uint8_t node = room->childList[i].node;
+        Radio.transmit(node, (unsigned char*)&txPacket, sizeof(txPacket));
+        while(Radio.busy()){}
+        if (Radio.receiverOn((unsigned char*)&rxPacket, sizeof(rxPacket), 5000) <= 0) {
+          // Failed connection
+          continue;
+        }
+        // Below happens when successful connected
+        if (!strcmp((char*)rxPacket.msg, "ACK")) {
+          temp += rxPacket.parent;
+          count++;
+        }
+      }
     }
-    uint8_t localTemp = getLocalTemp();
+    temp += getLocalTemp();
+    temp /=  ++count;
   } else {
   /***************************
   TODO: get temperature from slave
@@ -270,6 +357,7 @@ void updateRoomInfo(roomStruct room) {
 
 uint8_t getLocalTemp() {
   // TODO: Return calculated local temp 
+  return 100;
 }
 
 void uiBackground() {
@@ -585,7 +673,6 @@ boolean addChild(roomStruct *room, String name, child_t type, const uint8_t *ico
   uint8_t position = childSize % 6;  
   /******* Connecting ******/
   uint8_t newNode = getNode(room, type);
-  txPacket.parent = ADDRESS_LOCAL;
   txPacket.node = newNode;
   strcpy((char*)txPacket.msg, "PAIR");
   Radio.transmit((uint8_t)type, (unsigned char*)&txPacket, sizeof(txPacket));
@@ -605,13 +692,25 @@ boolean addChild(roomStruct *room, String name, child_t type, const uint8_t *ico
     room->childList[childSize].node = newNode;  
     room->childSize++;
     increment(room, type);
-//    strcpy((char*)txPacket.msg, "TEST");
-//    delay(5000);
-//    debug(String(newNode));
-//    Radio.transmit(newNode, (unsigned char*)&txPacket, sizeof(txPacket));
     return true;
-  }  
+  }
   addErrorMessage(retry);
+  return false;
+}
+
+boolean deleteChild(uint8_t node) {
+  strcpy((char*)txPacket.msg, "DEL");
+  Radio.transmit(node, (unsigned char*)&txPacket, sizeof(txPacket));
+  while(Radio.busy()){}
+  if (Radio.receiverOn((unsigned char*)&rxPacket, sizeof(rxPacket), 30000) <= 0) {
+    // Failed deletion
+//    addErrorMessage(timeout);
+    return false;
+  }
+  if (!strcmp((char*)rxPacket.msg, "ACK")) {
+    debug("Returned ACK");
+    // Child deletion
+  }
   return false;
 }
 
@@ -792,6 +891,7 @@ void initAIR() {
   Radio.begin(ADDRESS_LOCAL, CHANNEL_1, POWER_MAX);
   memset(rxPacket.msg, 0, sizeof(rxPacket.msg));
   memset(txPacket.msg, 0, sizeof(txPacket.msg));
+  txPacket.parent = ADDRESS_LOCAL;
 }
 
 void initLCD() {
