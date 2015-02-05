@@ -1,7 +1,7 @@
 #include "Energia.h"
 #define IMAGE_FMT_8BPP_UNCOMP     0x08
 
-const uint8_t g_onImage[] =
+const uint8_t g_offImage[] =
 {
     IMAGE_FMT_8BPP_UNCOMP,
     64, 0,
@@ -605,7 +605,7 @@ const uint8_t g_onImage[] =
     0x01, 0x01, 0x01, 0x01,
 };
 
-const uint8_t g_offImage[] =
+const uint8_t g_onImage[] =
 {
     IMAGE_FMT_8BPP_UNCOMP,
     64, 0,
