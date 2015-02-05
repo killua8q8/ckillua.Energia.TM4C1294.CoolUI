@@ -6,7 +6,7 @@
 #include "util.h"
 
 #define DEBUG true
-#define ADDRESS_LOCAL 0x01
+#define ADDRESS_LOCAL 0x00  /* Slave controller increment by 0x10, max total 4 controllers, so node up to 0x30*/
 struct sPacket rxPacket;
 struct sPacket txPacket;
 
@@ -221,9 +221,10 @@ void removeChild(roomStruct* room, uint8_t index) {
   if (index == room->childSize-1) {
     ;
   } else {
-    for (int i = 0; i < room->childSize; i++) {
+    for (int i = 0; i < room->childSize-1; i++) {
       if (i == index++) {
         room->childList[i] = room->childList[index];
+        room->childList[i].button.define(&myScreen, room->childList[i].button.getIcon(), xy[i][0], xy[i][1], room->childList[i].name);
       }
     }
   }
@@ -262,8 +263,6 @@ boolean childConfig(roomStruct* room) {
       }
     }
   }
-  
-  //TODO: control children
 }
 
 void resetChildConfigUI(roomStruct* room) {
@@ -306,7 +305,6 @@ void resetRoomConfigUI(roomStruct* room) {
   updateRoomInfo(room);
   updateTime(true);
   
-  // TODO: Need g_updateImage 
   updateButton.dDefine(&myScreen, g_updateImage, xy[count][0], xy[count][1], setItem(100, "UPDATE"));
   updateButton.enable();
   updateButton.draw();
@@ -632,12 +630,27 @@ boolean newChild(roomStruct *room, uint8_t type) {
             addErrorMessage(childNameRepeat);
           } else {
             if (type == NEWFAN) {
+              if (room->f >= 11) {
+                addErrorMessage(getChildTypeString(FAN) + outOfLimit);
+                delay(2000);
+                return HOME;
+              }              
               if (flag = addChild(room, name, FAN, g_fanImage)) debug("FAN added");
               else debug("Failed connect FAN");
             } else if (type == NEWVENT) {
+              if (room->v >= 11) {
+                addErrorMessage(getChildTypeString(VENT) + outOfLimit);
+                delay(2000);
+                return HOME;
+              }
               if (flag = addChild(room, name, VENT, g_ventImage)) debug("VENT added");
               else debug("Failed connect VENT");
             } else if (type == NEWBLIND) {
+              if (room->b >= 11) {
+                addErrorMessage(getChildTypeString(BLIND) + outOfLimit);
+                delay(2000);
+                return HOME;
+              }
               if (flag = addChild(room, name, BLIND, g_blindImage)) debug("BLIND added");
               else debug("Failed connect BLIND");
             } else {
@@ -695,22 +708,6 @@ boolean addChild(roomStruct *room, String name, child_t type, const uint8_t *ico
     return true;
   }
   addErrorMessage(retry);
-  return false;
-}
-
-boolean deleteChild(uint8_t node) {
-  strcpy((char*)txPacket.msg, "DEL");
-  Radio.transmit(node, (unsigned char*)&txPacket, sizeof(txPacket));
-  while(Radio.busy()){}
-  if (Radio.receiverOn((unsigned char*)&rxPacket, sizeof(rxPacket), 30000) <= 0) {
-    // Failed deletion
-//    addErrorMessage(timeout);
-    return false;
-  }
-  if (!strcmp((char*)rxPacket.msg, "ACK")) {
-    debug("Returned ACK");
-    // Child deletion
-  }
   return false;
 }
 
