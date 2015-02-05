@@ -34,6 +34,9 @@ extern const uint8_t g_blindImage[];
 extern const uint8_t g_ventImage[];
 extern const uint8_t g_infoImage[];
 extern const uint8_t g_updateImage[];
+extern const uint8_t g_removeImage[];
+extern const uint8_t g_onImage[];
+extern const uint8_t g_offImage[]; 
 
 const String nameEmpty = "Name cannot be empty";
 const String roomNameRepeat = "Room name existed";
