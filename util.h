@@ -38,9 +38,13 @@ extern const uint8_t g_updateImage[];
 const String nameEmpty = "Name cannot be empty";
 const String roomNameRepeat = "Room name existed";
 const String childNameRepeat = "Child name existed";
+const String timeout = "Timeout, please retry";
+const String retry = "Error, please retry";
 
 typedef enum {
-  VENT, FAN, BLIND
+  VENT = 0x60,
+  FAN = 0x70,
+  BLIND = 0x80
 } child_t;
 
 typedef enum {
@@ -50,8 +54,9 @@ typedef enum {
 // RF packet struct
 struct sPacket
 {
+  uint8_t parent;
   uint8_t node;
-  uint8_t msg[59];
+  uint8_t msg[58];
 };
 
 typedef struct childStruct {
@@ -65,6 +70,7 @@ typedef struct roomStruct {
   String name;
   roomButton button;
   uint8_t childSize;
+  uint8_t v = 0,f = 0,b = 0;
   childStruct childList[MAXCHILDSIZE];
   uint8_t node;
   control_t type;
