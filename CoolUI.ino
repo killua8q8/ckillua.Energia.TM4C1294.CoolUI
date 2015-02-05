@@ -5,10 +5,8 @@
 #include <LCD_GUI.h>
 #include "util.h"
 
-#define ADDRESS_PAIR 0x00
-#define ADDRESS_SLAVEBASE 0x0F
-#define ADDRESS_CHILDBASE 0x5F
 #define DEBUG true
+#define ADDRESS_LOCAL 0x01
 struct sPacket rxPacket;
 struct sPacket txPacket;
 
@@ -24,8 +22,7 @@ boolean firstInitialized = false;
 boolean isMaster = true;
 roomStruct room_l[MAXROOMSIZE];
 childStruct child_l[MAXCHILDSIZE];
-uint8_t roomSize = 0, childrenNodeCount = ADDRESS_CHILDBASE, roomNodeCount = ADDRESS_SLAVEBASE;
-uint8_t ADDRESS_LOCAL;
+uint8_t roomSize = 0;
 
 // System time vars
 int8_t hour = 0, minute = 0, second = 0;
@@ -35,7 +32,6 @@ void setup()
 {
   // start serial communication at 115200 baud
   Serial.begin(115200);
-  ADDRESS_LOCAL = 0x01;
   initAIR();
   initLCD();
   opening();
@@ -416,7 +412,7 @@ boolean pairRoom() {
     } else if (key == 0x06) {
       if (!isEmpty(name)) {
         if (roomSize > 0 && repeatRoomName(name)) {
-          repeatNameMessage(roomNameRepeat);
+          addErrorMessage(roomNameRepeat);
         } else {
           if (roomSize < MAXROOMSIZE) {
             newRoom(name);
@@ -517,6 +513,7 @@ boolean newChild(roomStruct *room, uint8_t type) {
 
   String name = "";
   uint8_t key;
+  boolean flag;
   item next_i = setItem(80, "NEXT");  
   nextButton.dDefine(&myScreen, g_nextImage, 223, 96, next_i);
   nextButton.enable();
@@ -535,7 +532,7 @@ boolean newChild(roomStruct *room, uint8_t type) {
   }
   INITKB;
 
-  while (1) {    
+  while (1) {
     updateTime(true);
     key = GETKEY;
     if (key == 0x0D) {
@@ -544,19 +541,21 @@ boolean newChild(roomStruct *room, uint8_t type) {
       if (!isEmpty(name)) {
         if (room->childSize < MAXCHILDSIZE) {
           if (room->childSize > 0 && repeatChildName(room, name)) {
-            repeatNameMessage(childNameRepeat);
+            addErrorMessage(childNameRepeat);
           } else {
             if (type == NEWFAN) {
-              addChild(room, name, FAN, g_fanImage);
-              debug("FAN added");
+              if (flag = addChild(room, name, FAN, g_fanImage)) debug("FAN added");
+              else debug("Failed connect FAN");
             } else if (type == NEWVENT) {
-              addChild(room, name, VENT, g_ventImage);
+              if (flag = addChild(room, name, VENT, g_ventImage)) debug("VENT added");
+              else debug("Failed connect VENT");
             } else if (type == NEWBLIND) {
-              addChild(room, name, BLIND, g_blindImage);
+              if (flag = addChild(room, name, BLIND, g_blindImage)) debug("BLIND added");
+              else debug("Failed connect BLIND");
             } else {
               return HOME;
             }
-            return HOME;
+            if (flag) return HOME;
           }          
         } else {
           maxNumberError("Children");
@@ -581,28 +580,67 @@ boolean newChild(roomStruct *room, uint8_t type) {
   
 }
 
-void addChild(roomStruct *room, String name, child_t type, const uint8_t *icon) {
+boolean addChild(roomStruct *room, String name, child_t type, const uint8_t *icon) {
   uint8_t childSize = room->childSize;
-  uint8_t position = childSize % 6;
-  
-  room->childList[childSize].name = name;
-  room->childList[childSize].type = type;
-  room->childList[childSize].button.define(&myScreen, icon, xy[position][0], xy[position][1], name);
-  room->childList[childSize].button.enable();
-  /********************/
-  setRadioPairing();
-  String msg = "parent " + String(ADDRESS_LOCAL) + " node " + String(ADDRESS_CHILDBASE) + " type " + getChildTypeString(room->childList[childSize].type);
-  txPacket.node = ADDRESS_LOCAL;
-  msg.toCharArray((char*)txPacket.msg, 59);  
-  boolean confirm = false;
-  do {
-    Radio.transmit(ADDRESS_CHILDBASE, (unsigned char*)&txPacket, sizeof(txPacket));
-  } while(Radio.receiverOn((unsigned char*)&rxPacket, sizeof(rxPacket), 5000) <= 0);
-  setRadioTransceiving();
-  room->childList[childSize].node = rxPacket.node;
-  debug("connection made to node: " + String(rxPacket.node));
-  /********************/
-  room->childSize++;  
+  uint8_t position = childSize % 6;  
+  /******* Connecting ******/
+  uint8_t newNode = getNode(room, type);
+  txPacket.parent = ADDRESS_LOCAL;
+  txPacket.node = newNode;
+  strcpy((char*)txPacket.msg, "PAIR");
+  Radio.transmit((uint8_t)type, (unsigned char*)&txPacket, sizeof(txPacket));
+  while(Radio.busy()){}
+  if (Radio.receiverOn((unsigned char*)&rxPacket, sizeof(rxPacket), 30000) <= 0) {
+    // Failed connection
+    addErrorMessage(timeout);
+    return false;
+  }
+  // Below happens when successful connected
+  if (!strcmp((char*)rxPacket.msg, "ACK")) {
+    debug(String(rxPacket.node) + " " + String((char*)rxPacket.msg));
+    room->childList[childSize].name = name;
+    room->childList[childSize].type = type;
+    room->childList[childSize].button.define(&myScreen, icon, xy[position][0], xy[position][1], name);
+    room->childList[childSize].button.enable();
+    room->childList[childSize].node = newNode;  
+    room->childSize++;
+    increment(room, type);
+//    strcpy((char*)txPacket.msg, "TEST");
+//    delay(5000);
+//    debug(String(newNode));
+//    Radio.transmit(newNode, (unsigned char*)&txPacket, sizeof(txPacket));
+    return true;
+  }  
+  addErrorMessage(retry);
+  return false;
+}
+
+uint8_t getNode(roomStruct *room, child_t type) {
+  switch(type) {
+  case VENT:
+    return VENT + ADDRESS_LOCAL + room->v;
+    break;
+  case FAN:
+    return FAN + ADDRESS_LOCAL + room->f;
+    break;
+  case BLIND:
+    return BLIND + ADDRESS_LOCAL + room->b;
+    break;
+  }
+}
+
+void increment(roomStruct *room, child_t type) {
+  switch(type) {
+  case VENT:
+    room->v++;
+    break;
+  case FAN:
+    room->f++;
+    break;
+  case BLIND:
+    room->b++;
+    break;
+  }
 }
 
 boolean isEmpty(String s) {
@@ -639,7 +677,7 @@ void emptyStringMessage() {
   myScreen.gText(10, 102, nameEmpty, true, redColour);
 }
 
-void repeatNameMessage(String s) {
+void addErrorMessage(String s) {
   myScreen.setFontSize(1);
   myScreen.gText(10, 102, s, true, redColour);
 }
@@ -752,7 +790,6 @@ uint8_t _getKey(int _start, int _end, area left, area right, area row_1, area ro
 void initAIR() {
   // init AIR module
   Radio.begin(ADDRESS_LOCAL, CHANNEL_1, POWER_MAX);
-  rxPacket.node = 0;
   memset(rxPacket.msg, 0, sizeof(rxPacket.msg));
   memset(txPacket.msg, 0, sizeof(txPacket.msg));
 }
@@ -791,14 +828,4 @@ String getChildTypeString(child_t type) {
       return "";
       break;
   } 
-}
-
-void setRadioPairing() {
-  Radio.setAddress(ADDRESS_PAIR);
-//  Radio.setChannel(CHANNEL_4);
-}
-
-void setRadioTransceiving() {
-  Radio.setAddress(ADDRESS_LOCAL);
-//  Radio.setChannel(CHANNEL_1);
 }
