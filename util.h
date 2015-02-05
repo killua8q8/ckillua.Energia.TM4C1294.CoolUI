@@ -43,6 +43,7 @@ const String roomNameRepeat = "Room name existed";
 const String childNameRepeat = "Child name existed";
 const String timeout = "Timeout, please retry";
 const String retry = "Error, please retry";
+const String outOfLimit = " reaches max limit";
 
 typedef enum {
   VENT = 0x60,
