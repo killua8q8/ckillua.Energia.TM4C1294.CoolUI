@@ -6,7 +6,7 @@
 #include "util.h"
 
 #define DEBUG true
-#define ADDRESS_LOCAL 0x00  /* Slave controller increment by 0x10, max total 4 controllers, so node up to 0x30*/
+#define ADDRESS_LOCAL 0x00  /* Every slave controller increments by 0x10, max total 4 controllers, so node up to 0x30 */
 struct sPacket rxPacket;
 struct sPacket txPacket;
 
@@ -223,8 +223,11 @@ void removeChild(roomStruct* room, uint8_t index) {
   } else {
     for (int i = 0; i < room->childSize-1; i++) {
       if (i == index++) {
-        room->childList[i] = room->childList[index];
-        room->childList[i].button.define(&myScreen, room->childList[i].button.getIcon(), xy[i][0], xy[i][1], room->childList[i].name);
+        room->childList[i].name = room->childList[index].name;
+        room->childList[i].type = room->childList[index].type;
+        room->childList[i].button.define(&myScreen, room->childList[index].button.getIcon(), xy[i][0], xy[i][1], room->childList[i].name);
+        room->childList[i].button.enable();
+        room->childList[i].node = room->childList[index].node;
       }
     }
   }
@@ -232,10 +235,12 @@ void removeChild(roomStruct* room, uint8_t index) {
 }
 
 void childCommand(childStruct child, char* cmd) {
+  txPacket.node = child.node;
+  txPacket.parent = ADDRESS_LOCAL;
   strcpy((char*)txPacket.msg, cmd);
   Radio.transmit(child.node, (unsigned char*)&txPacket, sizeof(txPacket));
   while(Radio.busy()){}
-  if (Radio.receiverOn((unsigned char*)&rxPacket, sizeof(rxPacket), 5000) <= 0) {
+  if (Radio.receiverOn((unsigned char*)&rxPacket, sizeof(rxPacket), 10000) <= 0) {
     // Failed connection
     debug("No ACK from node " + String(rxPacket.node));
     return;
@@ -330,6 +335,8 @@ void updateRoomInfo(roomStruct* room) {
       strcpy((char*)txPacket.msg, "TEMP");
       for (int i = 0; i < room->childSize; i++) {
         uint8_t node = room->childList[i].node;
+        txPacket.parent = ADDRESS_LOCAL;
+        txPacket.node = node;
         Radio.transmit(node, (unsigned char*)&txPacket, sizeof(txPacket));
         while(Radio.busy()){}
         if (Radio.receiverOn((unsigned char*)&rxPacket, sizeof(rxPacket), 5000) <= 0) {
@@ -685,7 +692,7 @@ boolean addChild(roomStruct *room, String name, child_t type, const uint8_t *ico
   uint8_t childSize = room->childSize;
   uint8_t position = childSize % 6;  
   /******* Connecting ******/
-  uint8_t newNode = getNode(room, type);
+  uint8_t newNode = getChildNode(room, type) + 1;
   txPacket.node = newNode;
   strcpy((char*)txPacket.msg, "PAIR");
   Radio.transmit((uint8_t)type, (unsigned char*)&txPacket, sizeof(txPacket));
@@ -711,7 +718,7 @@ boolean addChild(roomStruct *room, String name, child_t type, const uint8_t *ico
   return false;
 }
 
-uint8_t getNode(roomStruct *room, child_t type) {
+uint8_t getChildNode(roomStruct *room, child_t type) {
   switch(type) {
   case VENT:
     return VENT + ADDRESS_LOCAL + room->v;
