@@ -58,9 +58,10 @@ typedef enum {
 // RF packet struct
 struct sPacket
 {
+  uint8_t upper, lower;
   uint8_t parent;
   uint8_t node;
-  uint8_t msg[58];
+  uint8_t msg[56];
 };
 
 typedef struct childStruct {
