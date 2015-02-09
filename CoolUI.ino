@@ -285,13 +285,19 @@ void resetChildConfigUI(roomStruct* room) {
 
 void roomConfig(roomStruct* room) {
   resetRoomConfigUI(room);
+  long current = millis();
   while (1) {
     updateTime(true);
+    if (millis() - current > 60000) {
+      updateRoomInfo(room);
+      current = millis();
+    }
     if (returnButton.check(true) || homeButton.isPressed()) {
       return;
     }
     if (updateButton.check(true)) {
       updateRoomInfo(room);
+      current = millis();
     }
     if (optionButton.check(true)) {
       if (childConfig(room)) {
@@ -327,6 +333,7 @@ void resetRoomConfigUI(roomStruct* room) {
 void updateRoomInfo(roomStruct* room) {
   uint8_t x = 28, y = 60, count = 0;
   uint16_t temp = 0;
+  float tempF = 0.0;
   myScreen.drawImage(g_infoImage, x, y);
   myScreen.setFontSize(3);
   myScreen.gText(x + 45, y + 20, room->name, true);
@@ -344,25 +351,35 @@ void updateRoomInfo(roomStruct* room) {
           continue;
         }
         // Below happens when successful connected
-        if (!strcmp((char*)rxPacket.msg, "ACK")) {
-          temp += rxPacket.parent;
+        if (!strcmp((char*)rxPacket.msg, "ACK")) {          
+          temp += (rxPacket.upper << 8) | rxPacket.lower;
           count++;
+          debug("ACK");
         }
       }
+      tempF += 3.6 * ((float)temp / count) * 100.0 / 1024;
+      count = 1;
     }
-    temp += getLocalTemp();
-    temp /=  ++count;
+    tempF = (tempF + getLocalTemp()) / (float)++count;
+    tempF = tempF * 9 / 5 + 32;
   } else {
   /***************************
   TODO: get temperature from slave
   ***************************/    
   }
-  myScreen.gText(x + 177,y + 20, String(temp) + (char)0xB0 + "F", true);
+  myScreen.gText(x + 177,y + 20, String((int)ceil(tempF)) + (char)0xB0 + "F", true);
 }
 
-uint8_t getLocalTemp() {
-  // TODO: Return calculated local temp 
-  return 100;
+float getLocalTemp() {
+  // TODO: Return calculated local temp
+  int val = 0;
+  for (int i = 0; i < 10; i++) {
+    val = analogRead(PE_1);
+  }
+  val += analogRead(PE_1);
+  val += analogRead(PE_1);
+  val += analogRead(PE_1);
+  return 3.3 * ((float)val / 4.0) * 100.0 / 4096.0;
 }
 
 void uiBackground() {
