@@ -2,14 +2,13 @@
 
 #define HOME true
 #define RETURN false
+#define SENSOR PE_1
 #define NEWFAN 0x01
 #define NEWVENT 0x02
 #define NEWBLIND 0x03
 #define MAXROOMSIZE 4
 #define MAXCHILDSIZE 5
-
-#define INITKB initKeyboard(&left, &right, &row_1, &row_2, &row_3, &row_4, keyRow_1, keyRow_2, keyRow_3, keyRow_4, keyRow_1_i, keyRow_2_i, keyRow_3_i, keyRow_4_i)
-#define GETKEY getKey(left, right, row_1, row_2, row_3, row_4, keyRow_1, keyRow_2, keyRow_3, keyRow_4, keyRow_1_i, keyRow_2_i, keyRow_3_i, keyRow_4_i)
+#define MAXNAMELENGTH 6
 
 extern const uint8_t g_logoImage[];
 extern const uint8_t g_room[];
@@ -26,7 +25,6 @@ extern const uint8_t g_pairFanImage[];
 extern const uint8_t g_pairVentImage[];
 extern const uint8_t g_pairBlindImage[];
 extern const uint8_t g_returnImage[];
-extern const uint8_t g_keyboardImage[];
 extern const uint8_t g_nextImage[];
 extern const uint8_t g_9624WhiteImage[];
 extern const uint8_t g_fanImage[];
@@ -66,30 +64,24 @@ struct sPacket
 
 typedef struct childStruct {
   String name;
-  child_t type;
-  childButton button;
   uint8_t node;
+  child_t type;  
+  childButton button;
 } childStruct;
 
 typedef struct roomStruct {
   String name;
+  uint8_t node;
+  control_t type;
   roomButton button;
   uint8_t childSize;
   uint8_t v = 0,f = 0,b = 0;
+  int16_t roomTemp;
   childStruct childList[MAXCHILDSIZE];
-  uint8_t node;
-  control_t type;
 } roomStruct;
 
 int xy[6][2] = {
   {28, 60}, {128, 60}, {228, 60}, {28, 156}, {128, 156}, {228, 156}
-};
-
-char keyOrder[4][11] = {
-  {'1', '2', '3', '4', '5', '6', '7', '8', '9', '0', 0x08},
-  {'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', '\''},
-  {'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', '(', ')'},
-  {'Z', 'X', 'C', 'V', 'B', 'N', 'M', '.', '_', '-', ' '}
 };
 
 
