@@ -9,6 +9,10 @@
 #define MAXROOMSIZE 4
 #define MAXCHILDSIZE 5
 #define MAXNAMELENGTH 6
+#define MAXTEMP 255
+#define MINTEMP 36
+#define TIMEMODE 1
+#define DATEMODE 2
 
 extern const uint8_t g_logoImage[];
 extern const uint8_t g_room[];
@@ -34,7 +38,22 @@ extern const uint8_t g_infoImage[];
 extern const uint8_t g_updateImage[];
 extern const uint8_t g_removeImage[];
 extern const uint8_t g_onImage[];
-extern const uint8_t g_offImage[]; 
+extern const uint8_t g_offImage[];
+extern const uint8_t g_jobImage[];
+extern const uint8_t g_jobAddImage[];
+extern const uint8_t g_jobAddBlackImage[];
+extern const uint8_t g_deleteImage[];
+extern const uint8_t g_previousImage[];
+extern const uint8_t g_returnSImage[];
+extern const uint8_t g_check16Image[];
+extern const uint8_t g_minusImage[];
+extern const uint8_t g_plusImage[];
+extern const uint8_t g_uncheck16Image[];
+extern const uint8_t g_0120BKImage[];
+extern const uint8_t g_0144BKImage[];
+extern const uint8_t g_0168BKImage[];
+extern const uint8_t g_0192BKImage[];
+extern const uint8_t g_10102BKImage[];
 
 const String nameEmpty = "Name cannot be empty";
 const String roomNameRepeat = "Room name existed";
@@ -42,6 +61,7 @@ const String childNameRepeat = "Child name existed";
 const String timeout = "Timeout, please retry";
 const String retry = "Error, please retry";
 const String outOfLimit = " reaches max limit";
+const String connecting = "Connecting...";
 
 typedef enum {
   VENT = 0x60,
@@ -76,12 +96,10 @@ typedef struct roomStruct {
   roomButton button;
   uint8_t childSize;
   uint8_t v = 0,f = 0,b = 0;
-  int16_t roomTemp;
+  int16_t roomTempC, roomTempF;
   childStruct childList[MAXCHILDSIZE];
 } roomStruct;
 
 int xy[6][2] = {
   {28, 60}, {128, 60}, {228, 60}, {28, 156}, {128, 156}, {228, 156}
 };
-
-
