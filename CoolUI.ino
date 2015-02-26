@@ -27,9 +27,8 @@ item home_i, option_i;
 
 // System main vars
 String deviceName;
-boolean firstInitialized = false;
-boolean timeInterrupt = false;
-boolean celsius = true;
+boolean firstInitialized = false, celsius = true;
+boolean timeInterrupt = false, _idle = false, _idleInterrupt = false;
 roomStruct room_l[MAXROOMSIZE];
 uint8_t roomSize = 0;
 uint8_t updateTimeMode;
@@ -51,6 +50,10 @@ void setup()
 void loop()
 {
   // put your main code here, to run repeatedly:
+  if (_idle) {
+    while(_idle){delay(1);}
+    home();
+  }
   if (optionButton.check(true)) {
     option();
     home();
@@ -127,6 +130,10 @@ boolean jobConfig(roomStruct* room) {
   }
   
   while (1) {
+    if (_idle) {
+      while(_idle){delay(1);}
+      resetJobConfigUI(page, job.scheduleSize > 6);
+    }
     if (homeButton.isPressed()) {
       return HOME; 
     }
@@ -157,6 +164,7 @@ boolean jobConfig(roomStruct* room) {
 }
 
 boolean addJob(roomStruct* room, boolean add, uint8_t index) {
+  setIdleInterrupt(true);
   if (add) debug("ADD JOB");
   else debug("EDIT JOB");
   boolean timeCheck = false, minTempCheck = false, maxTempCheck = false, onCheck = false, offCheck = false;
@@ -195,8 +203,8 @@ boolean addJob(roomStruct* room, boolean add, uint8_t index) {
   
   
   while (1) {
-    if (homeButton.isPressed()) return HOME;
-    if (returnsButton.check(true)) return RETURN;
+    if (homeButton.isPressed()) { setIdleInterrupt(false); return HOME; }
+    if (returnsButton.check(true)) { setIdleInterrupt(false); return RETURN; }
     if (nextButton.check(true)) {
       if (selection != "Nothing" && (maxTempCheck || (timeCheck || minTempCheck) && (onCheck || offCheck))) {
         if (timeCheck) { condition = 0; }
@@ -209,12 +217,14 @@ boolean addJob(roomStruct* room, boolean add, uint8_t index) {
         uint8_t ci = getChildNameByIndex(room, selection);
         if (add) job.addSchedule(selection, ci, cmd, condition, t, data[2], data[3]);
         else job.editSchedule(index, selection, ci, cmd, condition, t, data[2], data[3]);
+        setIdleInterrupt(false);
         return RETURN;
       }
     }
     if (!add && removeJobButton.check(true)) {
       debug("TODO: Finish remove job"); 
       job.removeSchedule(index);
+      setIdleInterrupt(false);
       return RETURN;
     }
     for (int i = 0; i < room->childSize; i++) {
@@ -497,6 +507,10 @@ void jc_init_once() {
 boolean childConfig(roomStruct* room) {
   resetChildConfigUI(room);
   while(1) {
+    if (_idle) {
+      while(_idle){delay(1);}
+      resetChildConfigUI(room);
+    }
     if (homeButton.isPressed()) {
       return HOME;
     }
@@ -514,21 +528,21 @@ boolean childConfig(roomStruct* room) {
 
 boolean childControl(roomStruct* room, childStruct child, uint8_t index) {
   uint8_t count = 0;
-  uiBackground();
   onButton.dDefine(&myScreen, g_onImage, xy[count][0], xy[count++][1], setItem(100, "ON"));
-  onButton.enable();
-  onButton.draw();
+  onButton.enable();  
   offButton.dDefine(&myScreen, g_offImage, xy[count][0], xy[count++][1], setItem(100, "OFF"));
-  offButton.enable();
-  offButton.draw();
+  offButton.enable();  
   removeButton.dDefine(&myScreen, g_removeImage, xy[count][0], xy[count++][1], setItem(100, "REMOVE"));
-  removeButton.enable();
-  removeButton.draw();
+  removeButton.enable();  
   returnButton.dDefine(&myScreen, g_returnImage, xy[count][0], xy[count++][1], setItem(100, "RETURN"));
   returnButton.enable();
-  returnButton.draw();
+  resetChildControlUI();
   
   while(1) {
+    if (_idle) {
+      while(_idle){delay(1);}
+      resetChildControlUI();
+    }
     if (homeButton.isPressed()) {
       return HOME;
     }
@@ -547,6 +561,14 @@ boolean childControl(roomStruct* room, childStruct child, uint8_t index) {
       return RETURN;
     }
   }
+}
+
+void resetChildControlUI() {
+  uiBackground();
+  onButton.draw();
+  offButton.draw();
+  removeButton.draw();
+  returnButton.draw();
 }
 
 void childCommand(childStruct child, char* cmd) {
@@ -609,6 +631,10 @@ void roomConfig(roomStruct *room) {
   resetRoomConfigUI(room);
   long current = millis();
   while(1) {
+    if (_idle) {
+      while(_idle){delay(1);}
+      resetRoomConfigUI(room);
+    }
     if (millis() - current > 60000) {
       updateRoomInfo(room);
       current = millis();
@@ -736,6 +762,10 @@ void option() {
   restOption(setTimeButton, pairSlaveButton, pairChildButton);
   
   while (1) {
+    if (_idle) {
+      while(_idle){delay(1);}
+      restOption(setTimeButton, pairSlaveButton, pairChildButton);
+    }
     if (homeButton.isPressed() || returnButton.check(true)) {
       return;
     }
@@ -788,6 +818,10 @@ boolean pairChild(roomStruct *room) {
   resetPairChild(pairFan, pairVent, pairBlind);
   
   while(1) {
+    if (_idle) {
+      while(_idle){delay(1);}
+      resetPairChild(pairFan, pairVent, pairBlind);
+    }   
     if (homeButton.isPressed()) {
       debug("Home is pressed");
       return HOME;
@@ -817,6 +851,7 @@ void resetPairChild(imageButton pairFan, imageButton pairVent, imageButton pairB
 }
 
 boolean newChild(roomStruct *room, uint8_t type) {
+  setIdleInterrupt(true);
   String name = "";
   uint8_t key;
   boolean flag;
@@ -839,6 +874,7 @@ boolean newChild(roomStruct *room, uint8_t type) {
   KB.draw();
   while (1) {
     if (homeButton.isPressed()) {
+      setIdleInterrupt(false);
       return HOME; 
     }
     if (nextButton.check(true)) {
@@ -850,6 +886,7 @@ boolean newChild(roomStruct *room, uint8_t type) {
             if (type == NEWFAN) {
               if (room->f >= 11) {
                 childExceeded(FAN);
+                setIdleInterrupt(false);
                 return HOME;
               }              
               if (flag = addChild(room, name, FAN, g_fanImage)) debug("FAN added");
@@ -857,6 +894,7 @@ boolean newChild(roomStruct *room, uint8_t type) {
             } else if (type == NEWVENT) {
               if (room->v >= 11) {
                 childExceeded(VENT);
+                setIdleInterrupt(false);
                 return HOME;
               }
               if (flag = addChild(room, name, VENT, g_ventImage)) debug("VENT added");
@@ -864,16 +902,19 @@ boolean newChild(roomStruct *room, uint8_t type) {
             } else if (type == NEWBLIND) {
               if (room->b >= 11) {
                 childExceeded(BLIND);
+                setIdleInterrupt(false);
                 return HOME;
               }
               if (flag = addChild(room, name, BLIND, g_blindImage)) debug("BLIND added");
               else debug("Failed connect BLIND");
             } else {
               KB.setEnable(false);
+              setIdleInterrupt(false);
               return HOME;
             }
             if (flag) {
               KB.setEnable(false);
+              setIdleInterrupt(false);
               return HOME;
             }
           }          
@@ -881,6 +922,7 @@ boolean newChild(roomStruct *room, uint8_t type) {
           maxNumberError("Children");
           KB.setEnable(false);
           delay(3000);
+          setIdleInterrupt(false);
           return HOME;
         }        
       } else {
@@ -893,6 +935,7 @@ boolean newChild(roomStruct *room, uint8_t type) {
       delay (1); 
     } else if (key == 0x0D) {
       KB.setEnable(false);
+      setIdleInterrupt(false);
       return HOME;
     } else if (key == 0x08) {
       if (name.length() > 0) {
@@ -993,7 +1036,7 @@ String getChildTypeString(child_t type) {
 /*                                   New Rooms                                  */
 /********************************************************************************/
 boolean pairRoom() {
-  
+  setIdleInterrupt(true);
   String name = "";
   uint8_t key;
   nextButton.dDefine(&myScreen, g_nextImage, 223, 96, setItem(80, "NEXT"));
@@ -1014,6 +1057,7 @@ boolean pairRoom() {
   KB.draw();  
   while (1) {
     if (firstInitialized && homeButton.isPressed()) {
+      setIdleInterrupt(false);
       return HOME; 
     }    
     if (nextButton.check(true)) {
@@ -1027,6 +1071,7 @@ boolean pairRoom() {
             maxNumberError("Rooms");
           }
           KB.setEnable(false);
+          setIdleInterrupt(false);
           return HOME;
         }
       } else {
@@ -1040,6 +1085,7 @@ boolean pairRoom() {
     } else if (key == 0x0D) {
       if (firstInitialized) {
         KB.setEnable(false);
+        setIdleInterrupt(false);
         return HOME;
       }
     } else if (key == 0x08) {
@@ -1132,29 +1178,17 @@ void updateTime() {
   }
 }
 
-void timeModeToggle() {
-  delay(5000);
-  updateTimeMode = 2;
-  delay(5000);
-  updateTimeMode = 1;
-}
-
 void _updateTime(RTCTime *time) {
   RTC.GetAll(time);
   myScreen.drawImage(g_timebarImage, 80, 0);
   myScreen.setFontSize(3);
 }
 
-void setTimeInterupt(boolean flag) {
-  timeInterrupt = flag;
-}
-
 void dateSet() {
-  setTimeInterupt(true);
+  setTimeInterrupt(true);
+  setIdleInterrupt(true);
   button timeSetOK;
   imageButton monthUp, dayUp, yearUp, monthDown, dayDown, yearDown;
-  
-  myScreen.clear(whiteColour);
   
   /* init elements */
   timeSetOK.dDefine(&myScreen, 228, 195, 60, 40, setItem(0, "OK"), blueColour, yellowColour);
@@ -1189,19 +1223,14 @@ void dateSet() {
   }
   
   /* draw element */  
-  gText(56, 51, "Today's date?", grayColour, 3);
-  gText(55, 50, "Today's date?", blueColour, 3);
-  monthUp.draw();  dayUp.draw();  yearUp.draw();
-  gText(64, 124, str, blackColour, 3);
-  monthDown.draw();  dayDown.draw();  yearDown.draw();
-  timeSetOK.draw(true);
-  /*****************/
+  ds_ui_init(str, monthUp, dayUp, yearUp, monthDown, dayDown, yearDown, timeSetOK);
   
   while(1) {
     if (timeSetOK.isPressed()) {
       debug("Date set " + String(str));
       RTC.SetDate(day, mon, year%100, (uint8_t)(year / 100));
-      setTimeInterupt(false);
+      setTimeInterrupt(false);
+      setIdleInterrupt(false);
       return;
     }
     myScreen.setPenSolid(true);
@@ -1268,13 +1297,21 @@ void dateSet() {
   }
 }
 
+void ds_ui_init(char* str, imageButton mu, imageButton du, imageButton yu, imageButton md, imageButton dd, imageButton yd, button ts) {
+  myScreen.clear(whiteColour);
+  dsts_ui_init(56, "Today's date?");
+  mu.draw();  du.draw();  yu.draw();
+  drawTimeDateSetting(64, str);
+  md.draw();  dd.draw();  yd.draw();
+  ts.draw(true);
+}
+
 void timeSet() {
-  setTimeInterupt(true);
+  setTimeInterrupt(true);
+  setIdleInterrupt(true);
   button timeSetOK;
   imageButton dayUp, hourUp, minUp, secUp, dayDown, hourDown, minDown, secDown;
   item timeSetOK_i, up_i, down_i;
-  
-  myScreen.clear(whiteColour);
   
   /* init elements */
   timeSetOK_i = setItem(0, "OK");
@@ -1318,20 +1355,15 @@ void timeSet() {
   }
   debug(String(str));
   
-  /* draw element */  
-  gText(8, 51, "How about the time?", grayColour, 3);
-  gText(7, 50, "How about the time?", blueColour, 3);
-  dayUp.draw();  hourUp.draw();  minUp.draw();  secUp.draw();
-  dayDown.draw();  hourDown.draw();  minDown.draw();  secDown.draw();
-  gText(40, 124, str, blackColour, 3);
-  timeSetOK.draw(true);
-  /*****************/
+  /* draw element */
+  ts_ui_init(str, dayUp, hourUp, minUp, secUp, dayDown, hourDown, minDown, secDown, timeSetOK);
   
   while(1) {
     if (timeSetOK.isPressed()) {
       debug("Time set " + String(str));
       RTC.SetTime(hour, mins, secs, day);
-      setTimeInterupt(false);
+      setTimeInterrupt(false);
+      setIdleInterrupt(false);
       return;
     }
     myScreen.setPenSolid(true);
@@ -1386,6 +1418,21 @@ void timeSet() {
       drawTimeDateSetting(40, str);
     }
   }  
+}
+
+void ts_ui_init(char* str, imageButton du, imageButton hu, imageButton mu, imageButton su, imageButton dd, imageButton hd, imageButton md, imageButton sd, button ts) {
+  myScreen.clear(whiteColour);
+  dsts_ui_init(8, "How about the time?");
+  du.draw();  hu.draw();  mu.draw();  su.draw();
+  dd.draw();  hd.draw();  md.draw();  sd.draw();
+  drawTimeDateSetting(40, str);
+  ts.draw(true);
+}
+
+void dsts_ui_init(uint8_t x, String text) {
+  myScreen.clear(whiteColour);
+  gText(x, 51, text, grayColour, 3);
+  gText(x-1, 50, text, blueColour, 3);
 }
 
 void drawTimeDateSetting(uint8_t x, char* str) {
@@ -1495,16 +1542,44 @@ void debug(String s) {
 }
 
 void idle() {
-  if (++_timer == 5000) {
-    myScreen.setBacklight(true);
+  if (!_idle && !_idleInterrupt && ++_timer == 1000) {
+    debug("Screen enters idle");
+    _idle = true;
+    drawIdle();    
+    setTimeInterrupt(true); 
+//    myScreen.setBacklight(true);
   }
   if (myScreen.isTouch()) {
     _timer = 0;
-    myScreen.setBacklight(false);
+    if (_idle) {
+      debug("Screen leaves idle");
+      _idle = false;
+      setTimeInterrupt(false);
+//      myScreen.setBacklight(false);
+    }
   }  
+}
+
+void drawIdle() {
+  myScreen.drawImage(g_idleImage, 0, 0);
 }
 
 void gText(uint16_t x, uint16_t y, String s, uint16_t c, uint8_t size) {
   myScreen.setFontSize(size);
   myScreen.gText(x, y, s, true, c); 
+}
+
+void timeModeToggle() {
+  delay(5000);
+  updateTimeMode = 2;
+  delay(5000);
+  updateTimeMode = 1;
+}
+
+void setTimeInterrupt(boolean flag) {
+  timeInterrupt = flag;
+}
+
+void setIdleInterrupt(boolean flag) {
+  _idleInterrupt = flag;
 }
