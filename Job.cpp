@@ -26,8 +26,6 @@ boolean Job::addSchedule(String name, uint8_t index, cmd_type cmd, uint8_t cond_
 }
 
 boolean Job::removeSchedule(uint8_t index) {
-  Serial.println(index);
-  Serial.println(scheduleSize);
   onUpdate = true;
   while (onLoop) {
     delay(1); 
@@ -38,7 +36,6 @@ boolean Job::removeSchedule(uint8_t index) {
     for (int i = 0; i < scheduleSize-1; i++) {
       if (i == index) {
         index++;
-        Serial.println(index);
         schedules[i].childName = schedules[index].childName;
         schedules[i].childIndex = schedules[index].childIndex;
         schedules[i].command = schedules[index].command;
