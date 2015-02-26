@@ -54,6 +54,7 @@ extern const uint8_t g_0144BKImage[];
 extern const uint8_t g_0168BKImage[];
 extern const uint8_t g_0192BKImage[];
 extern const uint8_t g_10102BKImage[];
+extern const uint8_t g_idleImage[];
 
 const String nameEmpty = "Name cannot be empty";
 const String roomNameRepeat = "Room name existed";
@@ -103,3 +104,5 @@ typedef struct roomStruct {
 int xy[6][2] = {
   {28, 60}, {128, 60}, {228, 60}, {28, 156}, {128, 156}, {228, 156}
 };
+
+
