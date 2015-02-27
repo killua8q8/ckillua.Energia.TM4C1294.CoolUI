@@ -35,6 +35,7 @@ extern const uint8_t g_fanImage[];
 extern const uint8_t g_blindImage[];
 extern const uint8_t g_ventImage[];
 extern const uint8_t g_infoImage[];
+extern const uint8_t g_infoCImage[];
 extern const uint8_t g_updateImage[];
 extern const uint8_t g_removeImage[];
 extern const uint8_t g_onImage[];
@@ -104,5 +105,3 @@ typedef struct roomStruct {
 int xy[6][2] = {
   {28, 60}, {128, 60}, {228, 60}, {28, 156}, {128, 156}, {228, 156}
 };
-
-
