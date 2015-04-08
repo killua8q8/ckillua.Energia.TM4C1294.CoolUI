@@ -3,6 +3,9 @@
 #define HOME true
 #define RETURN false
 #define SENSOR PE_1
+#define COOL PN_1  // TODO: finish it
+#define HEAT PN_0  // TODO: finish it
+#define ACFAN PF_4  // TODO: finish it
 #define NEWFAN 0x01
 #define NEWVENT 0x02
 #define NEWBLIND 0x03
@@ -13,6 +16,10 @@
 #define MINTEMP 36
 #define TIMEMODE 1
 #define DATEMODE 2
+#define DEFAULTHVAC 78
+#define ACMAX 90
+#define ACMIN 50
+#define VREF 3.3
 
 extern const uint8_t g_logoImage[];
 extern const uint8_t g_room[];
@@ -56,6 +63,12 @@ extern const uint8_t g_0168BKImage[];
 extern const uint8_t g_0192BKImage[];
 extern const uint8_t g_10102BKImage[];
 extern const uint8_t g_idleImage[];
+extern const uint8_t g_acFanImage[];
+extern const uint8_t g_autoImage[];
+extern const uint8_t g_coolImage[];
+extern const uint8_t g_heatImage[];
+extern const uint8_t g_hvacImage[];
+extern const uint8_t g_roomListImage[];
 
 const String nameEmpty = "Name cannot be empty";
 const String roomNameRepeat = "Room name existed";
@@ -83,6 +96,20 @@ struct sPacket
   uint8_t node;
   uint8_t msg[56];
 };
+// RF packet struct for master communication
+struct mPacket {
+  uint8_t name[10];
+  uint8_t node, master;
+  uint8_t childSize;
+  uint8_t tempF, tempC;
+  uint8_t msg[45];
+};
+struct cPacket {
+  uint8_t name[MAXCHILDSIZE][8];
+  uint8_t node[MAXCHILDSIZE];
+  uint8_t type[MAXCHILDSIZE];
+  uint8_t msg[10];
+};
 
 typedef struct childStruct {
   String name;
@@ -105,3 +132,5 @@ typedef struct roomStruct {
 int xy[6][2] = {
   {28, 60}, {128, 60}, {228, 60}, {28, 156}, {128, 156}, {228, 156}
 };
+
+
