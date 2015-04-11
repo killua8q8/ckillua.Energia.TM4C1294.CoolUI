@@ -7,7 +7,6 @@
 #include <LCD_GUI.h>
 #include "util.h"
 #include "Keyboard.h"
-#include "Job.h"
 
 #define DEBUG true
 #define ADDRESS_LOCAL 0x00  /* Every slave controller increments by 0x10, max total 4 controllers, so node up to 0x30 */
@@ -16,6 +15,8 @@ struct sPacket rxPacket;
 struct sPacket txPacket;
 struct mPacket mxPacket;
 struct cPacket cxPacket;
+struct jPacket jxPacket;
+struct kPacket kxPacket;
 
 // UI related elements
 Screen_K35 myScreen;
@@ -31,12 +32,11 @@ item home_i, option_i;
 // System main vars
 String deviceName;
 boolean firstInitialized = false, celsius = true;
-boolean timeInterrupt = false, _idle = false, _idleInterrupt = false;
+boolean timeInterrupt = false, _idle = false, _idleInterrupt = false, t2t = false, t2tInterrupt = false;
 roomStruct room_l[MAXROOMSIZE];
 uint8_t roomSize = 0;
 uint8_t updateTimeMode;
 long _timer = 0;
-Job job;
 
 //HVAC vars
 uint8_t hvacTemp;
@@ -121,42 +121,42 @@ void home() {
 /*                                  Job Controls                                */
 /********************************************************************************/
 void jobs() {  
-  if (!job.onUpdate && job.scheduleSize > 0) {
-    job.onLoop = true;
+  if (!room_l[0].job.onUpdate && room_l[0].job.scheduleSize > 0) {
+    room_l[0].job.onLoop = true;
     RTCTime current;
-    for (int i = 0 ; i < job.scheduleSize; i++) {
-      if (job.schedules[i].enable) {
+    for (int i = 0 ; i < room_l[0].job.scheduleSize; i++) {
+      if (room_l[0].job.schedules[i].enable) {
         RTC.GetAll(&current);
-        if (job.schedules[i].cond.cond_type == 0) {  //Time base          
-          if (!job.schedules[i].done && current.hour == job.schedules[i].cond.time.hour && current.minute == job.schedules[i].cond.time.minute/* && abs(current.second - job.schedules[i].cond.time.second) <= 1000*/) {
-            childCommand(room_l[0].childList[job.schedules[i].childIndex], job.cmdTypeToString(job.schedules[i].command));
-            job.setJobDone(i, true);
-          } else if (abs(current.minute - job.schedules[i].cond.time.minute) > 0 && job.schedules[i].done) {
-            job.setJobDone(i, false);
+        if (room_l[0].job.schedules[i].cond.cond_type == 0) {  //Time base          
+          if (!room_l[0].job.schedules[i].done && current.hour == room_l[0].job.schedules[i].cond.time.hour && current.minute == room_l[0].job.schedules[i].cond.time.minute/* && abs(current.second - room_l[0].job.schedules[i].cond.time.second) <= 1000*/) {
+            childCommand(room_l[0].childList[room_l[0].job.schedules[i].childIndex], room_l[0].job.cmdTypeToString(room_l[0].job.schedules[i].command));
+            room_l[0].job.setJobDone(i, true);
+          } else if (abs(current.minute - room_l[0].job.schedules[i].cond.time.minute) > 0 && room_l[0].job.schedules[i].done) {
+            room_l[0].job.setJobDone(i, false);
           }
-        } else if (job.schedules[i].cond.cond_type == 1) {  //Temp base
-          if (!job.schedules[i].done && job.schedules[i].cond.minTemp == room_l[0].roomTempF) {
-            childCommand(room_l[0].childList[job.schedules[i].childIndex], job.cmdTypeToString(job.schedules[i].command));
-            job.setJobDoneTime(i, current);
-            job.setJobDone(i, true);
+        } else if (room_l[0].job.schedules[i].cond.cond_type == 1) {  //Temp base
+          if (!room_l[0].job.schedules[i].done && room_l[0].job.schedules[i].cond.minTemp == room_l[0].roomTempF) {
+            childCommand(room_l[0].childList[room_l[0].job.schedules[i].childIndex], room_l[0].job.cmdTypeToString(room_l[0].job.schedules[i].command));
+            room_l[0].job.setJobDoneTime(i, current);
+            room_l[0].job.setJobDone(i, true);
           } else {
-            if (abs(current.minute - job.schedules[i].cond.time.minute) >= 2) {
-              job.setJobDone(i, false);
+            if (abs(current.minute - room_l[0].job.schedules[i].cond.time.minute) >= 2) {
+              room_l[0].job.setJobDone(i, false);
             }
           }
-        } else if (job.schedules[i].cond.cond_type == 2) {  //range
-          if (!job.schedules[i].done) {
-            debug(String(room_l[0].roomTempF) + " " + job.schedules[i].cond.minTemp + " " + job.schedules[i].cond.maxTemp);
-            if (room_l[0].roomTempF <= job.schedules[i].cond.minTemp) {
-              childCommand(room_l[0].childList[job.schedules[i].childIndex], job.cmdTypeToString(OFF));
-            } else if (room_l[0].roomTempF >= job.schedules[i].cond.maxTemp) {
-              childCommand(room_l[0].childList[job.schedules[i].childIndex], job.cmdTypeToString(ON));
+        } else if (room_l[0].job.schedules[i].cond.cond_type == 2) {  //range
+          if (!room_l[0].job.schedules[i].done) {
+            debug(String(room_l[0].roomTempF) + " " + room_l[0].job.schedules[i].cond.minTemp + " " + room_l[0].job.schedules[i].cond.maxTemp);
+            if (room_l[0].roomTempF <= room_l[0].job.schedules[i].cond.minTemp) {
+              childCommand(room_l[0].childList[room_l[0].job.schedules[i].childIndex], room_l[0].job.cmdTypeToString(OFF));
+            } else if (room_l[0].roomTempF >= room_l[0].job.schedules[i].cond.maxTemp) {
+              childCommand(room_l[0].childList[room_l[0].job.schedules[i].childIndex], room_l[0].job.cmdTypeToString(ON));
             }
-            job.setJobDoneTime(i, current);
-            job.setJobDone(i, true);
+            room_l[0].job.setJobDoneTime(i, current);
+            room_l[0].job.setJobDone(i, true);
           } else {
-            if (abs(current.minute - job.schedules[i].cond.time.minute) >= 1) {
-              job.setJobDone(i, false);
+            if (abs(current.minute - room_l[0].job.schedules[i].cond.time.minute) >= 1) {
+              room_l[0].job.setJobDone(i, false);
             }
           }
         }
@@ -165,22 +165,19 @@ void jobs() {
   } else {
     delay(5); 
   }
-  job.onLoop = false;
+  room_l[0].job.onLoop = false;
   delay(5);
 }
 
 boolean jobConfig(roomStruct* room) {
   uint8_t page = 1;
-  if (room->type == MASTER) {
-    resetJobConfigUI(page, job.scheduleSize > 6);
-  } else if (room->type == SLAVE) {
-    // TODO: Slave portion 
-  }
+  syncSlave(room);
+  resetJobConfigUI(room, page, room->job.scheduleSize > 6);
   
   while (1) {
     if (_idle) {
       while(_idle){delay(1);}
-      resetJobConfigUI(page, job.scheduleSize > 6);
+      resetJobConfigUI(room, page, room->job.scheduleSize > 6);
     }
     if (homeButton.isPressed()) {
       return HOME; 
@@ -188,27 +185,50 @@ boolean jobConfig(roomStruct* room) {
     if (returnsButton.check(true)) {
       return RETURN; 
     }
-    for (int i = 0; i < job.scheduleSize; i++) {
-      if (job.schedules[i].list.check(true)) {
+    for (int i = 0; i < room->job.scheduleSize; i++) {
+      if (room->job.schedules[i].list.check(true)) {
         if (addJob(room, false, i)) return HOME;
-        resetJobConfigUI(page, job.scheduleSize > 6);
+        resetJobConfigUI(room, page, room->job.scheduleSize > 6);
       }
-      if (job.schedules[i].checkBox.check(true)) {
-        job.setJobEnable(i, !job.isEnable(i));
-        resetJobConfigUI(page, job.scheduleSize > 6);
-      }      
+      if (room->job.schedules[i].checkBox.check(true)) {
+        if (room->type == SLAVE) {
+          if (syncSlave(room)) {
+            mxPacket.data = i;
+            if (slaveCommand(room, "ENJOB")) {
+              debug("second sync");
+              if (!syncSlave(room))
+                debug("fail second sync");
+            } else 
+              debug("fail ENJOB");
+          } else
+            debug("fail first sync");
+        } else {
+          room->job.setJobEnable(i, !room->job.isEnable(i));
+        }
+        resetJobConfigUI(room, page, room->job.scheduleSize > 6);
+      }
     }
     if (addJobButton.check(true)) {
-      if (room->childSize > 0 && job.scheduleSize < MAXSCHEDULE && addJob(room, true, -1)) return HOME;
-      resetJobConfigUI(page, job.scheduleSize > 6);
+      syncSlave(room);
+      if (room->childSize > 0 && room->job.scheduleSize < MAXSCHEDULE && addJob(room, true, -1)) return HOME;
+      resetJobConfigUI(room, page, room->job.scheduleSize > 6);
     }
     if (nextButton.check(true)) {
-      resetJobConfigUI(++page, job.scheduleSize > 6);
+      syncSlave(room);
+      resetJobConfigUI(room, ++page, room->job.scheduleSize > 6);
     }
     if (previousButton.check(true)) {
-      resetJobConfigUI(--page, job.scheduleSize > 6);
+      syncSlave(room);
+      resetJobConfigUI(room, --page, room->job.scheduleSize > 6);
     }
   }
+}
+
+boolean syncSlave(roomStruct *room) {
+  if (room->type == SLAVE) {
+    return slaveCommand(room, "BASIC") && slaveCommand(room, "CHILD") && slaveCommand(room, "JOB");
+  }
+  return false;
 }
 
 boolean addJob(roomStruct* room, boolean add, uint8_t index) {
@@ -226,13 +246,13 @@ boolean addJob(roomStruct* room, boolean add, uint8_t index) {
     aj_init_once(room, temp);
     resetAddJobUI(room, temp, timeCheck, minTempCheck, maxTempCheck, onCheck, offCheck, selection, data, 0);
   } else {
-    data[0] = job.schedules[index].cond.time.hour;
-    data[1] = job.schedules[index].cond.time.minute;
-    data[2] = job.schedules[index].cond.minTemp;
-    data[3] = job.schedules[index].cond.maxTemp;
-    cmd = job.schedules[index].command;
-    selection = job.schedules[index].childName;
-    condition = job.schedules[index].cond.cond_type;
+    data[0] = room->job.schedules[index].cond.time.hour;
+    data[1] = room->job.schedules[index].cond.time.minute;
+    data[2] = room->job.schedules[index].cond.minTemp;
+    data[3] = room->job.schedules[index].cond.maxTemp;
+    cmd = room->job.schedules[index].command;
+    selection = room->job.schedules[index].childName;
+    condition = room->job.schedules[index].cond.cond_type;
     if (condition == 0) {  // 0 - timebase, 1 - tempbase, 2 - range
       timeCheck = true;
     } else if (condition == 1) {
@@ -263,16 +283,32 @@ boolean addJob(roomStruct* room, boolean add, uint8_t index) {
         if (onCheck) { cmd = ON; }
         else { cmd = OFF; }
         uint8_t ci = getChildNameByIndex(room, selection);
-        if (add) job.addSchedule(selection, ci, cmd, condition, t, data[2], data[3]);
-        else job.editSchedule(index, selection, ci, cmd, condition, t, data[2], data[3]);
+        if (room->type == SLAVE) {
+          if (add) {
+            if (!slaveCommand(room, "ADDJOB")) return RETURN;
+          } else {
+            mxPacket.data = index;
+            if (!slaveCommand(room, "EDITJOB")) return RETURN;
+          }
+          feedbackJobInfo(room, ci, condition, cmd, t, data[2], data[3]);
+          updateSlaveJobInfo(room);
+        } else {
+          if (add) room->job.addSchedule(selection, ci, cmd, condition, t, data[2], data[3]);
+          else room->job.editSchedule(index, selection, ci, cmd, condition, t, data[2], data[3]);
+        }
         setIdleInterrupt(false);
         return RETURN;
       }
     }
     if (!add && removeJobButton.check(true)) {
-      debug("TODO: Finish remove job"); 
-      job.removeSchedule(index);
-      setIdleInterrupt(false);
+      if (room->type == SLAVE) {
+        mxPacket.data = index;
+        if (slaveCommand(room, "DELJOB"))
+          updateSlaveJobInfo(room);
+      } else {
+        room->job.removeSchedule(index);
+      }
+      setIdleInterrupt(false);  
       return RETURN;
     }
     for (int i = 0; i < room->childSize; i++) {
@@ -506,9 +542,9 @@ void aj_buttonDraw() {
   maxTempMinusButton.draw();
 }
 
-void resetJobConfigUI(uint8_t page, boolean multipage) {
+void resetJobConfigUI(roomStruct* room, uint8_t page, boolean multipage) {
   int x;
-  jc_init_once();
+  jc_init_once(room);
   uiBackground();
   addJobButton.draw();
   if (multipage) {
@@ -516,26 +552,26 @@ void resetJobConfigUI(uint8_t page, boolean multipage) {
       previousButton.enable(false);
       nextButton.enable(true);
       nextButton.draw();
-      if (job.scheduleSize > 6) x = 6;
-      else x = job.scheduleSize;
+      if (room->job.scheduleSize > 6) x = 6;
+      else x = room->job.scheduleSize;
     } else {
       nextButton.enable(false);
       previousButton.enable(true);
       previousButton.draw();      
-      x = job.scheduleSize;
+      x = room->job.scheduleSize;
     }
   } else {
-    x = job.scheduleSize;
+    x = room->job.scheduleSize;
   }
   for (int i = (page-1)*6; i < x; i++) {
-    job.schedules[i].checkBox.draw();
-    job.schedules[i].list.draw();
+    room->job.schedules[i].checkBox.draw();
+    room->job.schedules[i].list.draw();
   }
   returnsButton.draw();
 }
 
-void jc_init_once() {
-  if (job.scheduleSize >= MAXSCHEDULE) {
+void jc_init_once(roomStruct* room) {
+  if (room->job.scheduleSize >= MAXSCHEDULE) {
     addJobButton.dDefine(&myScreen, g_jobAddBlackImage, 0, 48, setItem(100, "ADDJOB"));
     addJobButton.enable(false);
   } else {
@@ -553,7 +589,7 @@ void jc_init_once() {
 /*                                Child Controls                                */
 /********************************************************************************/
 boolean childConfig(roomStruct* room) {
-  slaveCommand(room, "CHILD");
+  if (room->type == SLAVE) slaveCommand(room, "CHILD");
   resetChildConfigUI(room);
   while(1) {
     if (_idle) {
@@ -1293,7 +1329,7 @@ boolean newRoom(String name) {
     for (int i = 0x10; i < 0x40; i += 0x10) {
       Radio.transmit(i, (unsigned char*)&mxPacket, sizeof(mxPacket));
       while(Radio.busy()){}
-      if (Radio.receiverOn((unsigned char*)&mxPacket, sizeof(mxPacket), 10000) <= 0) continue;
+      if (Radio.receiverOn((unsigned char*)&mxPacket, sizeof(mxPacket), 1000) <= 0) continue;
       if (String((char*)mxPacket.name) != name) continue;
       if  (getSlaveInfo(i, position, name, &room_l[roomSize])) {
         roomSize++;
@@ -1329,21 +1365,24 @@ boolean getSlaveInfo(uint8_t node, uint8_t position, String name, roomStruct *ro
 }
 
 boolean slaveCommand(roomStruct *room, char* cmd) {
+  while (t2tInterrupt) {delay (1);}
+  t2t = true;  
   while(Radio.busy()){}
   feedback(room->node, cmd);
-  if (Radio.receiverOn((unsigned char*)&mxPacket, sizeof(mxPacket), 10000) > 0 && mxPacket.node == room->node) {
-    if (!strcmp((char*)mxPacket.msg, "NAK")) return false;  // Nak from slave
-    if (!strcmp((char*)mxPacket.msg, "END")) return true;  // End transmit
-    if (!strcmp((char*)mxPacket.msg, "ACK")) return true;  // ACK transmit
+  if (Radio.receiverOn((unsigned char*)&mxPacket, sizeof(mxPacket), 2000) > 0 && mxPacket.node == room->node) {
+    if (!strcmp((char*)mxPacket.msg, "NAK")) { t2t = false; return false; }  // Nak from slave
+    if (!strcmp((char*)mxPacket.msg, "END")) { t2t = false; return true; }  // End transmit
+    if (!strcmp((char*)mxPacket.msg, "ACK")) { t2t = false; return true; }  // ACK transmit
     if (!strcmp((char*)mxPacket.msg, "BASIC")) {  // check if basic info packet
       room->name = (char*)mxPacket.name;
       room->type = SLAVE;
-      room->childSize = mxPacket.childSize;
-      room->roomTempC = mxPacket.tempF;
-      room->roomTempF = mxPacket.tempC;
+      room->childSize = mxPacket.data;
+      room->roomTempC = mxPacket.tempC;
+      room->roomTempF = mxPacket.tempF;
+      t2t = false;
       return true;
     } else if (!strcmp((char*)mxPacket.msg, "CHILD")) {  // check if child info packet
-      if (Radio.receiverOn((unsigned char*)&cxPacket, sizeof(cxPacket), 20000) > 0) {
+      if (Radio.receiverOn((unsigned char*)&cxPacket, sizeof(cxPacket), 5000) > 0) {
         if (!strcmp((char*)cxPacket.msg, "CHILD")) {
           for (int i = 0; i < room->childSize; i++) {
             room->childList[i].name = String((char*)cxPacket.name[i]);
@@ -1357,22 +1396,77 @@ boolean slaveCommand(roomStruct *room, char* cmd) {
               room->childList[i].button.define(&myScreen, g_blindImage, xy[i][0], xy[i][1], room->childList[i].name);
             } else {
                debug("Wrong type");
+               t2t = false;
                return false;
             }
             room->childList[i].button.enable();
           }
+          t2t = false;
           return true;
         }
+        debug("wrong feedback when getting slave children");
       }
+      debug("overtime when getting slave children");
+      t2t = false;
       return false;
     } else if (!strcmp((char*)mxPacket.msg, "JOB")) {  // check if job info packet
-      
+      t2t = false;
+      return updateSlaveJobInfo(room);
     } else {
+      debug("feedback [" + String((char*)mxPacket.msg) + "] doesn't match for command: " + String(cmd));
+      t2t = false;
       return false;  // error if wrong message
     }
     feedback(room->node, "ACK");
   }
+  debug(String(room->node) + " " + String(mxPacket.node));
+  debug("timeout for command: " + String(cmd));
+  t2t = false;
   return false;
+}
+
+boolean updateSlaveJobInfo(roomStruct *room) {
+  if (Radio.receiverOn((unsigned char*)&kxPacket, sizeof(kxPacket), 1000) <= 0) {
+    debug("timeout for kxPacket");
+    return false;
+  }
+  room->job.init(&myScreen);
+  room->job.scheduleSize = kxPacket.childSize;
+  while(Radio.busy()){}
+  if (Radio.receiverOn((unsigned char*)&jxPacket, sizeof(jxPacket), 5000) > 0) {
+    for (int i = 0; i < room->job.scheduleSize; i++) {
+      RTCTime t;
+      t.hour = jxPacket.data1[i];
+      t.minute = jxPacket.data2[i];
+      room->job.setScheduleDetail(true, i, room->childList[jxPacket.childIndex[i]].name, jxPacket.childIndex[i], (cmd_type) jxPacket.cmd[i], jxPacket.cond[i], t,jxPacket.data1[i], jxPacket.data2[i]);
+      if (kxPacket.enable[i] == 1)
+        room->job.setJobEnable(i, true);
+      else
+        room->job.setJobEnable(i, false);
+      Serial.println(kxPacket.enable[i]);
+      Serial.println(room->job.schedules[i].enable);
+    }
+    return true;
+  }
+  debug("timeout when updating slave jobs");
+  room->job.scheduleSize = 0;
+  return false;
+}
+
+boolean feedbackJobInfo(roomStruct *room, uint8_t childIndex, uint8_t condition, cmd_type cmd, RTCTime t, uint8_t data1, uint8_t data2) {
+  jxPacket.childIndex[0] = childIndex;
+  jxPacket.cond[0] = condition;
+  jxPacket.cmd[0] = (uint8_t) cmd;
+  if (condition == 0) {
+    jxPacket.data1[0] = t.hour; 
+    jxPacket.data2[0] = t.minute;
+  } else {
+    jxPacket.data1[0] = data1; 
+    jxPacket.data2[0] = data2;
+  }
+  while(Radio.busy()){}
+  Radio.transmit(room->node, (unsigned char*)&jxPacket, sizeof(jxPacket));
+  while(Radio.busy()){}
 }
 
 // for Master-to-Slave communication only
@@ -1738,7 +1832,7 @@ boolean firstInit() {
   dateSet();
   deviceTimeInit();
   hvacInit();
-  job.init(&myScreen);
+  room_l[0].job.init(&myScreen);
   Scheduler.startLoop(updateTime);
   Scheduler.startLoop(timeModeToggle);
   return pairRoom();
@@ -1831,7 +1925,10 @@ void hvacOn(uint8_t type, boolean flag) {
 /*                                  Utils                                  */
 /***************************************************************************/
 void updateCurrentRoomTemp() {
+  while (t2t) { delay(5); }  
+  t2tInterrupt = true;  
   room_l[0].roomTempC = (int16_t)ceil(getAverageTemp(&room_l[0]));
+  t2tInterrupt = false;
   room_l[0].roomTempF = room_l[0].roomTempC  * 9 / 5 + 32;
   debug("Room temperature auto updated: " + String(room_l[0].roomTempC) + "C " + room_l[0].roomTempF + "F");
   delay(30000);
