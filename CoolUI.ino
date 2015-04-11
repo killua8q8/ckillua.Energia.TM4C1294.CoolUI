@@ -853,7 +853,7 @@ boolean roomConfig(roomStruct *room) {
     }
     if (roomNameButton.isPressed()) {
       changeRoomName(room);
-      resetRoomConfigUI(room);
+      return RETURN;
     }
     if (roomTempButton.isPressed()) {
       celsius = !celsius;
