@@ -101,7 +101,7 @@ struct sPacket
 struct mPacket {
   uint8_t name[10];
   uint8_t node, master;
-  uint8_t childSize;
+  uint8_t data;
   uint8_t tempF, tempC;
   uint8_t msg[45];
 };
