@@ -1,4 +1,5 @@
 #include <Energia.h>
+#include "Job.h"
 
 #define HOME true
 #define RETURN false
@@ -110,6 +111,18 @@ struct cPacket {
   uint8_t type[MAXCHILDSIZE];
   uint8_t msg[10];
 };
+struct jPacket {
+  uint8_t childIndex[12];
+  uint8_t cond[12];
+  uint8_t cmd[12];
+  uint8_t data1[12];
+  uint8_t data2[12];
+};
+struct kPacket {
+  uint8_t childSize;
+  uint8_t enable[12];
+  uint8_t msg[47]; 
+};
 
 typedef struct childStruct {
   String name;
@@ -127,6 +140,7 @@ typedef struct roomStruct {
   uint8_t v = 0,f = 0,b = 0;
   int16_t roomTempC, roomTempF;
   childStruct childList[MAXCHILDSIZE];
+  Job job;
 } roomStruct;
 
 int xy[6][2] = {
