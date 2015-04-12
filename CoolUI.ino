@@ -21,18 +21,18 @@ struct kPacket kxPacket;
 // UI related elements
 Screen_K35 myScreen;
 button homeButton, updateTimeModeToggle, hvacUpButton, hvacDownButton, roomNameButton, roomTempButton;
-imageButton optionButton, nextButton, returnButton, updateButton, removeButton, onButton, offButton, jobButton;
+imageButton optionButton, nextButton, returnButton, updateButton, removeButton, onButton, offButton, jobButton, roomRenameButton;
 imageButton addJobButton, checkButton, uncheckButton, previousButton, returnsButton, childInfoButton, removeJobButton;
 imageButton timeCheckButton, minTempCheckButton, maxTempCheckButton, onCheckButton, offCheckButton;
 imageButton hourPlusButton, minPlusButton, minTempPlusButton, maxTempPlusButton;
 imageButton hourMinusButton, minMinusButton, minTempMinusButton, maxTempMinusButton;
-imageButton autoButton, fanButton, coolButton, heatButton, roomListButton;
+imageButton autoButton, fanButton, coolButton, heatButton, roomListButton, acOnButton, acOffButton;
 item home_i, option_i;
 
 // System main vars
 String deviceName;
 boolean firstInitialized = false, celsius = true;
-boolean timeInterrupt = false, _idle = false, _idleInterrupt = false, t2t = false, t2tInterrupt = false;
+boolean timeInterrupt = false, _idle = false, _idleInterrupt = false, t2t = false, t2tInterrupt = false, updateRooms = false, updateRoomsInterrupt = false;
 roomStruct room_l[MAXROOMSIZE];
 uint8_t roomSize = 0;
 uint8_t updateTimeMode;
@@ -40,7 +40,7 @@ long _timer = 0;
 
 //HVAC vars
 uint8_t hvacTemp;
-boolean acauto, fan, cool, heat;
+boolean acauto, fan, cool, heat, acon;
 
 void setup()
 {
@@ -53,6 +53,7 @@ void setup()
   Scheduler.startLoop(hvacControl);
   Scheduler.startLoop(idle);
   Scheduler.startLoop(jobs);
+  Scheduler.startLoop(updateAllRoomsInfo);
   home();
 }
 
@@ -103,11 +104,23 @@ void loop()
     roomList();
     home();
   }
+  if (acOnButton.check(true)) {
+    acon = true;
+    acOffButton.enable();
+    acOnButton.enable(false);
+    home();     
+  }
+  if (acOffButton.check(true)) {
+    acon = false;
+    acOffButton.enable(false);
+    acOnButton.enable();
+    home();
+  }
 }
 
 void home() {
   debug("Init home UI");
-  uiBackground();
+  uiBackground(false);
   hvacInfo();
   roomListButton.dDefine(&myScreen, g_roomListImage, xy[3][0], xy[3][1], setItem(99, "ROOMLIST"));
   roomListButton.enable();
@@ -115,6 +128,8 @@ void home() {
   optionButton.dDefine(&myScreen, g_optionImage, xy[5][0], xy[5][1], setItem(99, "OPTION"));
   optionButton.enable();
   optionButton.draw();
+  if (acon) acOnButton.draw();
+  else acOffButton.draw(); 
 }
 
 /********************************************************************************/
@@ -131,7 +146,7 @@ void jobs() {
           if (!room_l[0].job.schedules[i].done && current.hour == room_l[0].job.schedules[i].cond.time.hour && current.minute == room_l[0].job.schedules[i].cond.time.minute/* && abs(current.second - room_l[0].job.schedules[i].cond.time.second) <= 1000*/) {
             childCommand(room_l[0].childList[room_l[0].job.schedules[i].childIndex], room_l[0].job.cmdTypeToString(room_l[0].job.schedules[i].command));
             room_l[0].job.setJobDone(i, true);
-          } else if (abs(current.minute - room_l[0].job.schedules[i].cond.time.minute) > 0 && room_l[0].job.schedules[i].done) {
+          } else if (room_l[0].job.schedules[i].done && abs(current.minute - room_l[0].job.schedules[i].cond.time.minute) > 0) {
             room_l[0].job.setJobDone(i, false);
           }
         } else if (room_l[0].job.schedules[i].cond.cond_type == 1) {  //Temp base
@@ -171,13 +186,12 @@ void jobs() {
 
 boolean jobConfig(roomStruct* room) {
   uint8_t page = 1;
-  syncSlave(room);
-  resetJobConfigUI(room, page, room->job.scheduleSize > 6);
+  resetJobConfigUI(room, page, room->job.scheduleSize > 6, syncSlave(room));
   
   while (1) {
     if (_idle) {
       while(_idle){delay(1);}
-      resetJobConfigUI(room, page, room->job.scheduleSize > 6);
+      resetJobConfigUI(room, page, room->job.scheduleSize > 6, syncSlave(room));
     }
     if (homeButton.isPressed()) {
       return HOME; 
@@ -188,38 +202,41 @@ boolean jobConfig(roomStruct* room) {
     for (int i = 0; i < room->job.scheduleSize; i++) {
       if (room->job.schedules[i].list.check(true)) {
         if (addJob(room, false, i)) return HOME;
-        resetJobConfigUI(room, page, room->job.scheduleSize > 6);
+        resetJobConfigUI(room, page, room->job.scheduleSize > 6, syncSlave(room));
       }
       if (room->job.schedules[i].checkBox.check(true)) {
         if (room->type == SLAVE) {
           if (syncSlave(room)) {
             mxPacket.data = i;
             if (slaveCommand(room, "ENJOB")) {
-              debug("second sync");
-              if (!syncSlave(room))
-                debug("fail second sync");
-            } else 
+              debug("command sent");
+            } else {
               debug("fail ENJOB");
-          } else
+            }
+            resetJobConfigUI(room, page, room->job.scheduleSize > 6, syncSlave(room));
+          } else {
             debug("fail first sync");
+            resetJobConfigUI(room, page, room->job.scheduleSize > 6, false);
+          }
         } else {
           room->job.setJobEnable(i, !room->job.isEnable(i));
+          resetJobConfigUI(room, page, room->job.scheduleSize > 6, true);
         }
-        resetJobConfigUI(room, page, room->job.scheduleSize > 6);
       }
     }
     if (addJobButton.check(true)) {
-      syncSlave(room);
-      if (room->childSize > 0 && room->job.scheduleSize < MAXSCHEDULE && addJob(room, true, -1)) return HOME;
-      resetJobConfigUI(room, page, room->job.scheduleSize > 6);
+      if (syncSlave(room)) {
+        if (room->childSize > 0 && room->job.scheduleSize < MAXSCHEDULE && addJob(room, true, -1)) return HOME;
+      } else {
+        resetJobConfigUI(room, page, room->job.scheduleSize > 6, false);
+      }
+      resetJobConfigUI(room, page, room->job.scheduleSize > 6, syncSlave(room));
     }
     if (nextButton.check(true)) {
-      syncSlave(room);
-      resetJobConfigUI(room, ++page, room->job.scheduleSize > 6);
+      resetJobConfigUI(room, ++page, room->job.scheduleSize > 6, syncSlave(room));
     }
     if (previousButton.check(true)) {
-      syncSlave(room);
-      resetJobConfigUI(room, --page, room->job.scheduleSize > 6);
+      resetJobConfigUI(room, --page, room->job.scheduleSize > 6, syncSlave(room));
     }
   }
 }
@@ -228,7 +245,7 @@ boolean syncSlave(roomStruct *room) {
   if (room->type == SLAVE) {
     return slaveCommand(room, "BASIC") && slaveCommand(room, "CHILD") && slaveCommand(room, "JOB");
   }
-  return false;
+  return true;
 }
 
 boolean addJob(roomStruct* room, boolean add, uint8_t index) {
@@ -410,7 +427,7 @@ void resetAddJobUI(roomStruct* room, childButton* children, boolean tc, boolean 
   uint16_t textColor = myScreen.rgb(77, 132, 171);
   uint8_t xoff = 1;
   if (section == 0) {
-    uiBackground();
+    uiBackground(true);
     nextButton.draw();
     returnsButton.draw();
     for (int i = 0; i < room->childSize; i++) {
@@ -542,30 +559,35 @@ void aj_buttonDraw() {
   maxTempMinusButton.draw();
 }
 
-void resetJobConfigUI(roomStruct* room, uint8_t page, boolean multipage) {
+void resetJobConfigUI(roomStruct* room, uint8_t page, boolean multipage, boolean flag) {
   int x;
   jc_init_once(room);
-  uiBackground();
-  addJobButton.draw();
-  if (multipage) {
-    if (page == 1) {
-      previousButton.enable(false);
-      nextButton.enable(true);
-      nextButton.draw();
-      if (room->job.scheduleSize > 6) x = 6;
-      else x = room->job.scheduleSize;
+  uiBackground(true);
+  if (flag) {
+    addJobButton.draw();
+    if (multipage) {
+      if (page == 1) {
+        previousButton.enable(false);
+        nextButton.enable(true);
+        nextButton.draw();
+        if (room->job.scheduleSize > 6) x = 6;
+        else x = room->job.scheduleSize;
+      } else {
+        nextButton.enable(false);
+        previousButton.enable(true);
+        previousButton.draw();      
+        x = room->job.scheduleSize;
+      }
     } else {
-      nextButton.enable(false);
-      previousButton.enable(true);
-      previousButton.draw();      
       x = room->job.scheduleSize;
     }
+    for (int i = (page-1)*6; i < x; i++) {
+      room->job.schedules[i].checkBox.draw();
+      room->job.schedules[i].list.draw();
+    }
   } else {
-    x = room->job.scheduleSize;
-  }
-  for (int i = (page-1)*6; i < x; i++) {
-    room->job.schedules[i].checkBox.draw();
-    room->job.schedules[i].list.draw();
+    gText(8, 100, failToSyncSlaveStart + room->name + failToSyncSlaveEnd, myScreen.rgb(77, 132, 171), 1);
+    gText(8, 150, retry, redColour, 3);
   }
   returnsButton.draw();
 }
@@ -589,12 +611,11 @@ void jc_init_once(roomStruct* room) {
 /*                                Child Controls                                */
 /********************************************************************************/
 boolean childConfig(roomStruct* room) {
-  if (room->type == SLAVE) slaveCommand(room, "CHILD");
-  resetChildConfigUI(room);
+  resetChildConfigUI(room, slaveCommand(room, "CHILD"));
   while(1) {
     if (_idle) {
       while(_idle){delay(1);}
-      resetChildConfigUI(room);
+      resetChildConfigUI(room, slaveCommand(room, "CHILD"));
     }
     if (homeButton.isPressed()) {
       return HOME;
@@ -605,7 +626,7 @@ boolean childConfig(roomStruct* room) {
     for (int i = 0; i < room->childSize; i++) {
       if (room->childList[i].button.check(true)) {
         if (childControl(room, room->childList[i], i)) return HOME;
-        resetChildConfigUI(room);
+        resetChildConfigUI(room, slaveCommand(room, "CHILD"));
       }
     }
   }
@@ -685,7 +706,7 @@ void resetChildControlUI(float tmp, boolean c, uint8_t type) {  // type: 0 - upd
   int16_t t = ceil(3.3 * tmp * 100.0 / 1024.0);
   uint16_t textColor = myScreen.rgb(77, 132, 171);
   if (type == 0) {
-    uiBackground();
+    uiBackground(true);
     onButton.draw();
     offButton.draw();
     removeButton.draw();
@@ -744,12 +765,21 @@ void removeChild(roomStruct* room, uint8_t index) {
   room->childSize--;
 }
 
-void resetChildConfigUI(roomStruct* room) {
+void resetChildConfigUI(roomStruct* room, boolean flag) {
   uint8_t count = 0;  
-  uiBackground(); 
-  for (int i = 0; i < room->childSize; i++) {
-    room->childList[i].button.draw();
-    count++;
+  uiBackground(true); 
+  if (flag) {
+    for (int i = 0; i < room->childSize; i++) {
+      room->childList[i].button.enable(flag);
+      room->childList[i].button.draw();
+      count++;
+    }
+  } else {
+    for (int i = 0; i < room->childSize; i++) {
+      room->childList[i].button.enable(flag);
+    }
+    gText(8, 125, failToSyncSlaveStart + room->name + failToSyncSlaveEnd, myScreen.rgb(77, 132, 171), 1);
+    gText(8, 175, retry, redColour, 3);
   }
   returnButton.dDefine(&myScreen, g_returnImage, xy[count][0], xy[count][1], setItem(100, "RETURN"));
   returnButton.enable();
@@ -764,20 +794,39 @@ uint8_t getChildNameByIndex(roomStruct* room, String name) {
 /********************************************************************************/
 /*                                 Room Controls                                */
 /********************************************************************************/
-void changeRoomName(roomStruct *room) {
+void updateAllRoomsInfo() {
+  while (updateRoomsInterrupt) {delay (5);}
+  updateRooms = true;
+  for (int i = 0; i < roomSize; i++) {
+    if (!slaveCommand(&room_l[i], "BASIC")) 
+      debug("failed update room " + room_l[i].name);
+  }
+  updateRooms = false;
+  delay(60000);
+}
+
+boolean changeRoomName(roomStruct *room) {
   String original = room->name;
   String name = "";
   uint8_t key;
   initPairRoomUI();
   while (1) {
+    if (homeButton.isPressed()) {
+      return HOME; 
+    }
     if (nextButton.check(true)) {
-      if (!isEmpty(name)) {
-        room->name = name;
+      if (repeatRoomName(name)) {
+        addErrorMessage(roomNameRepeat);
+      } else if (isEmpty(name)) {
+        addErrorMessage(nameEmpty);
+      } else {
+        uint8_t pos = getRoomIndex(room);
+        room->name = name;        
+        room->button.define(&myScreen, g_room, xy[pos][0], xy[pos][1], room->name);
+        room->button.enable();
         KB.setEnable(false);
         setIdleInterrupt(false);
         break;
-      } else {
-        addErrorMessage(nameEmpty);
       }
     }    
     key = KB.getKey();
@@ -799,7 +848,13 @@ void changeRoomName(roomStruct *room) {
     room->name.toCharArray((char*)mxPacket.name, 10);
     mxPacket.node = room->node;
     slaveCommand(room, "NAME");
+  } else {
+    for (int i = 1; i < roomSize; i++) {
+      room->name.toCharArray((char*)mxPacket.name, 10);
+      while (slaveCommand(&room_l[i], "MNAME")) {}
+    }
   }
+  return RETURN;
 }
 
 void roomList() {
@@ -822,10 +877,13 @@ void roomList() {
 }
 
 void roomListUI() {
-  uiBackground();
+  uiBackground(true);
   uint8_t count = 0;  
   if (roomSize > 0) {
       for (int i = 0; i < roomSize; i++) {
+        slaveCommand(&room_l[i], "BASIC");
+        room_l[i].button.define(&myScreen, g_room, xy[i][0], xy[i][1], room_l[i].name);
+        room_l[i].button.enable();
         room_l[i].button.draw();
         count++;
       }
@@ -852,7 +910,7 @@ boolean roomConfig(roomStruct *room) {
       return HOME;
     }
     if (roomNameButton.isPressed()) {
-      changeRoomName(room);
+      if (roomOption(room)) return HOME;
       resetRoomConfigUI(room);
     }
     if (roomTempButton.isPressed()) {
@@ -865,7 +923,7 @@ boolean roomConfig(roomStruct *room) {
     }
     if (optionButton.check(true)) {
       if (childConfig(room)) {
-        return RETURN;
+        return HOME;
       } else {
         resetRoomConfigUI(room);
       }
@@ -878,6 +936,82 @@ boolean roomConfig(roomStruct *room) {
       } 
     }
   }
+}
+
+void removeRoom(roomStruct* room) {
+  uint8_t index = getRoomIndex(room);
+  if (index == 0) return;
+  if (index == roomSize - 1) {
+    ; 
+  } else {
+    for (int i = 1; i < roomSize-1; i++) {
+      if (index == i) {
+        index++;
+        room->name = room_l[index].name;
+        room->node = room_l[index].node;
+        room->type = room_l[index].type;
+        room->button.define(&myScreen, g_room, xy[index][0], xy[index][1], room->name);
+        room->button.enable();
+        room->childSize = room_l[index].childSize;
+        room->roomTempC = room_l[index].roomTempC;
+        room->roomTempF = room_l[index].roomTempF;
+        for (int j = 0; j = room->childSize; j++) {
+          room->childList[j].name = room_l[index].childList[j].name;
+          room->childList[j].type = room_l[index].childList[j].type;
+          room->childList[j].button.define(&myScreen, room_l[index].childList[j].button.getIcon(), xy[j][0], xy[j][1], room_l[index].childList[j].name);
+          room->childList[j].button.enable();
+          room->childList[j].node = room_l[index].childList[index].node;
+        }
+        room->job = room_l[index].job;  // Need test
+      }
+    }
+  }
+  roomSize--;
+}
+
+boolean roomOption(roomStruct *room) {
+  ro_init_once(room);
+  resetRoomOptionUI(room);
+  while (1) {
+    if (_idle) {
+      while(_idle){delay(1);}
+      resetRoomConfigUI(room);
+    }
+    if (homeButton.isPressed()) {
+      return HOME;
+    }
+    if (returnButton.check(true)) {
+      return RETURN;
+    }
+    if (roomRenameButton.check(true)) {
+      if (changeRoomName(room)) return HOME;
+      resetRoomConfigUI(room);
+    }
+    if (room->type != MASTER && removeButton.check(true)) {
+      slaveCommand(room, "DEL");
+      removeRoom(room);
+      return HOME;
+    }
+  }  
+}
+
+void ro_init_once(roomStruct *room) {
+  uint8_t count = 0;
+  roomRenameButton.dDefine(&myScreen, g_renameImage, xy[count][0], xy[count++][1], setItem(101, "RENAME"));
+  roomRenameButton.enable();
+  if (room->type != MASTER) {
+    removeButton.dDefine(&myScreen, g_removeImage, xy[count][0], xy[count++][1], setItem(101, "REMOVE"));
+    removeButton.enable();
+  }
+  returnButton.dDefine(&myScreen, g_returnImage, xy[count][0], xy[count++][1], setItem(101, "RETURN"));
+  returnButton.enable();
+}
+
+void resetRoomOptionUI(roomStruct *room) {
+  uiBackground(true);
+  roomRenameButton.draw();
+  if (room->type != MASTER) removeButton.draw();
+  returnButton.draw();
 }
 
 void rc_init_once() {
@@ -895,7 +1029,7 @@ void rc_init_once() {
 }
 
 void resetRoomConfigUI(roomStruct* room) {
-  uiBackground();
+  uiBackground(true);
   updateRoomInfo(room);  
   updateButton.draw();  
   optionButton.draw();
@@ -917,6 +1051,14 @@ void updateRoomInfo(roomStruct* room) {
   } else {
     gText(x + 177,y + 20, String(room->roomTempF) + (char)0xB0 + "F", whiteColour, 3);
   }  
+}
+
+uint8_t getRoomIndex(roomStruct* room) {
+  for (int i = 1; i < roomSize; i++) {
+    if (room_l[i].node == room->node)
+      return i; 
+  }
+  return 0;
 }
 
 float getAverageTemp(roomStruct* room) {
@@ -1021,7 +1163,7 @@ void option() {
 }
 
 void restOption(imageButton setTimeButton, imageButton pairSlaveButton, imageButton pairChildButton) {
-  uiBackground();
+  uiBackground(true);
   setTimeButton.draw();
   pairSlaveButton.draw();
   pairChildButton.draw();
@@ -1069,7 +1211,7 @@ boolean pairChild(roomStruct *room) {
 }
 
 void resetPairChild(imageButton pairFan, imageButton pairVent, imageButton pairBlind) {
-  uiBackground();
+  uiBackground(true);
   pairFan.draw();
   pairVent.draw();
   pairBlind.draw();
@@ -1319,8 +1461,9 @@ boolean pairRoom() {
 }
 
 boolean newRoom(String name) {
-  uint8_t position = roomSize % 6;
-  
+  updateRoomsInterrupt = true;
+  while(updateRooms) {delay(1);}
+  uint8_t position = roomSize % 6;  
   if (firstInitialized) {
     addErrorMessage(connecting);
     /*************************/
@@ -1333,9 +1476,14 @@ boolean newRoom(String name) {
       if (String((char*)mxPacket.name) != name) continue;
       if  (getSlaveInfo(i, position, name, &room_l[roomSize])) {
         roomSize++;
+        updateRoomsInterrupt = false;
         return true;
+      } else {
+        updateRoomsInterrupt = false;
+        return false; 
       }
     }
+    updateRoomsInterrupt = false;
     return false;
     /*************************/
   } else {
@@ -1346,34 +1494,43 @@ boolean newRoom(String name) {
     room_l[roomSize].button.define(&myScreen, g_room, xy[position][0], xy[position][1], name);
     room_l[roomSize].button.enable();
     roomSize++;
+    updateRoomsInterrupt = false;
     return true;
   }
 }
 
 boolean getSlaveInfo(uint8_t node, uint8_t position, String name, roomStruct *room) {
   room->node = node;
-  while(Radio.busy()){}
+  room->type = SLAVE;
+  debug(String(node));
   mxPacket.master = ADDRESS_LOCAL;
   mxPacket.node = room->node;
+  room_l[0].name.toCharArray((char*)mxPacket.name, 10);
   if (!slaveCommand(room, "CONNECT")) return false;
+  debug("connected");
   if (slaveCommand(room, "BASIC")) {
     room->button.define(&myScreen, g_room, xy[position][0], xy[position][1], room->name);
     room->button.enable();
     return true;
   }
+  debug("fail getting basic info");
   return false;  
 }
 
 boolean slaveCommand(roomStruct *room, char* cmd) {
+  if (room->type == MASTER) return true;
   while (t2tInterrupt) {delay (1);}
   t2t = true;  
   while(Radio.busy()){}
   feedback(room->node, cmd);
-  if (Radio.receiverOn((unsigned char*)&mxPacket, sizeof(mxPacket), 2000) > 0 && mxPacket.node == room->node) {
+  debug("send command: " + String(cmd));
+  if (Radio.receiverOn((unsigned char*)&mxPacket, sizeof(mxPacket), 3000) > 0 && mxPacket.node == room->node) {
+    debug("Received msg: " + String((char*)mxPacket.msg));
     if (!strcmp((char*)mxPacket.msg, "NAK")) { t2t = false; return false; }  // Nak from slave
     if (!strcmp((char*)mxPacket.msg, "END")) { t2t = false; return true; }  // End transmit
     if (!strcmp((char*)mxPacket.msg, "ACK")) { t2t = false; return true; }  // ACK transmit
     if (!strcmp((char*)mxPacket.msg, "BASIC")) {  // check if basic info packet
+      debug("getting basic");
       room->name = (char*)mxPacket.name;
       room->type = SLAVE;
       room->childSize = mxPacket.data;
@@ -1479,17 +1636,19 @@ void feedback(uint8_t node, char* msg) {
 /********************************************************************************/
 /*                                  UI Related                                  */
 /********************************************************************************/
-void uiBackground() {
+void uiBackground(boolean flag) {
   myScreen.clear(blackColour);
   myScreen.drawImage(g_bgImage, 0, 0);
-  homeButton.dDefine(&myScreen, 10, 4, 32, 32, setItem(0, "HOME"), whiteColour, redColour);
-  homeButton.enable();
+  if (flag) {
+    homeButton.dDefine(&myScreen, 10, 4, 32, 32, setItem(0, "HOME"), whiteColour, redColour);
+    homeButton.enable();
+  }
 }
 
 void uiKeyboardArea() {
   nextButton.dDefine(&myScreen, g_nextImage, 223, 96, setItem(80, "NEXT"));
   nextButton.enable();
-  uiBackground();
+  uiBackground(true);
   updateNameField("");
   nextButton.draw();
   KB.draw();
@@ -1817,7 +1976,7 @@ void addErrorMessage(String s) {
 }
 
 void maxNumberError(String s) {
-  uiBackground();
+  uiBackground(true);
   gText(8, 60, "Cannot add " + s + "...", redColour, 3);
   gText((320 - ((13+s.length()) * 12)) >> 1, 90, "Max " + s + " achieved", redColour, 2);
   delay(3000);
@@ -1873,44 +2032,96 @@ void opening() {
 /***************************************************************************/
 void hvacInit() {
   hvacTemp = DEFAULTHVAC;
-  acauto = true; fan = false; cool = true; heat = false;
+  acauto = true; fan = false; cool = true; heat = false, acon = true;
   autoButton.dDefine(&myScreen, g_autoImage, 220, 66, setItem(400, "AUTO"));
   fanButton.dDefine(&myScreen, g_acFanImage, 252, 66, setItem(400, "FAN")); 
   coolButton.dDefine(&myScreen, g_coolImage, 220, 93, setItem(400, "COOL"));
   heatButton.dDefine(&myScreen, g_heatImage, 252, 93, setItem(400, "HEAT"));
+  acOnButton.dDefine(&myScreen, g_acOnImage, xy[4][0], xy[4][1], setItem(400, "ACON"));
+  acOffButton.dDefine(&myScreen, g_acOffImage, xy[4][0], xy[4][1], setItem(400, "ACOFF"));
   hvacUpButton.dDefine(&myScreen, 79, 70, 19, 19, setItem(0, "UP"), whiteColour, redColour);
   hvacDownButton.dDefine(&myScreen, 79, 94, 19, 19, setItem(0, "DOWN"), whiteColour, redColour);
+  acOnButton.enable(false); acOffButton.enable();
   autoButton.enable(); fanButton.enable(); coolButton.enable(); heatButton.enable(); hvacUpButton.enable(); hvacDownButton.enable();
   pinMode(COOL, OUTPUT); pinMode(HEAT, OUTPUT); pinMode(ACFAN, OUTPUT);
 }
 
 void hvacControl() {
-  if (cool) {
-    hvacOn(HEAT, false);
-    hvacOn(COOL, true);    
-    if (acauto) {
-      if (room_l[0].roomTempF > hvacTemp) {
+  if (acon) {
+    if (cool) {
+      hvacOn(HEAT, false);
+      hvacOn(COOL, true);    
+      if (acauto) {
+        if (allRoomsCool()) {
+          hvacOn(ACFAN, false);
+        } else {
+          hvacOn(ACFAN, true);
+        }
+      } else if (fan) {
         hvacOn(ACFAN, true);
-      } else {
-        hvacOn(ACFAN, false);
       }
-    } else if (fan) {
-      hvacOn(ACFAN, true);
+    } else if (heat) {
+      hvacOn(COOL, false);
+      hvacOn(HEAT, true);
+      if (acauto) {
+        if (allRoomsWarm()) {
+          hvacOn(ACFAN, false);
+        } else {
+          hvacOn(ACFAN, true);
+        }
+      } else if (fan) {
+        hvacOn(ACFAN, true);
+      }
     }
-  } else if (heat) {
+  } else {
     hvacOn(COOL, false);
-    hvacOn(HEAT, true);
-    if (acauto) {
-      if (room_l[0].roomTempF < hvacTemp) {
-        hvacOn(ACFAN, true);
-      } else {
-        hvacOn(ACFAN, false);
-      }
-    } else if (fan) {
-      hvacOn(ACFAN, true);
+    hvacOn(HEAT, false);
+    hvacOn(ACFAN, false);
+  }
+  delay(1000);
+}
+
+boolean allRoomsCool() {
+  boolean flag = true;
+  for (int i = 0; i < roomSize; i++) {
+    if (room_l[i].roomTempF > hvacTemp) {
+      return flag = false;
+//      for (int j = 0; j < room_l[i].childSize; j++) {
+//        debug("child type : " + String(room_l[i].childList[j].type));
+//        if (room_l[i].childList[j].type == VENT) {
+//          childCommand(room_l[i].childList[j], "ON");
+//        }
+//      }
+//    } else {
+//      for (int j = 0; j < room_l[i].childSize; j++) {
+//        if (room_l[i].childList[j].type == VENT) {
+//          childCommand(room_l[i].childList[j], "OFF");
+//        }
+//      }
     }
   }
-  delay(1);
+  return flag;
+}
+
+boolean allRoomsWarm() {
+  boolean flag = true;
+  for (int i = 0; i < roomSize; i++) {
+    if (room_l[i].roomTempF < hvacTemp) {
+      return flag = false;
+//      for (int j = 0; j < room_l[i].childSize; j++) {
+//        if (room_l[i].childList[j].type == VENT) {
+//          childCommand(room_l[i].childList[j], "ON");
+//        }
+//      }
+//    } else {
+//      for (int j = 0; j < room_l[i].childSize; j++) {
+//        if (room_l[i].childList[j].type == VENT) {
+//          childCommand(room_l[i].childList[j], "OFF");
+//        }
+//      }
+    }
+  }
+  return flag;
 }
 
 void hvacOn(uint8_t type, boolean flag) {
