@@ -70,6 +70,9 @@ extern const uint8_t g_coolImage[];
 extern const uint8_t g_heatImage[];
 extern const uint8_t g_hvacImage[];
 extern const uint8_t g_roomListImage[];
+extern const uint8_t g_renameImage[];
+extern const uint8_t g_acOffImage[];
+extern const uint8_t g_acOnImage[];
 
 const String nameEmpty = "Name cannot be empty";
 const String roomNameRepeat = "Room name existed";
@@ -78,6 +81,8 @@ const String timeout = "Timeout, please retry";
 const String retry = "Error, please retry";
 const String outOfLimit = " reaches max limit";
 const String connecting = "Connecting...";
+const String failToSyncSlaveStart = "Unable to update ";
+const String failToSyncSlaveEnd = "'s information.";
 
 typedef enum {
   VENT = 0x60,
