@@ -48,6 +48,7 @@ void setup()
   Serial.begin(115200);
   initAIR();
   initLCD();
+  myScreen.calibrateTouch();
   firstInitialized = firstInit();
   Scheduler.startLoop(updateCurrentRoomTemp);
   Scheduler.startLoop(hvacControl);
@@ -930,7 +931,7 @@ boolean roomConfig(roomStruct *room) {
     }
     if (jobButton.check(true)) {
       if (jobConfig(room)) {
-        return RETURN;
+        return HOME;
       } else {
         resetRoomConfigUI(room);
       } 
@@ -985,7 +986,7 @@ boolean roomOption(roomStruct *room) {
     }
     if (roomRenameButton.check(true)) {
       if (changeRoomName(room)) return HOME;
-      resetRoomConfigUI(room);
+      return RETURN;
     }
     if (room->type != MASTER && removeButton.check(true)) {
       slaveCommand(room, "DEL");
@@ -1024,7 +1025,7 @@ void rc_init_once() {
   jobButton.enable();
   roomNameButton.dDefine(&myScreen, 35, 60, 134, 64, setItem(0, "NAME"), whiteColour, redColour);
   roomNameButton.enable();
-  roomTempButton.dDefine(&myScreen, 125, 60, 102, 64, setItem(0, "TEMP"), whiteColour, redColour);
+  roomTempButton.dDefine(&myScreen, 190, 60, 102, 64, setItem(0, "TEMP"), whiteColour, redColour);
   roomTempButton.enable();
 }
 
@@ -1519,8 +1520,8 @@ boolean getSlaveInfo(uint8_t node, uint8_t position, String name, roomStruct *ro
 
 boolean slaveCommand(roomStruct *room, char* cmd) {
   if (room->type == MASTER) return true;
+  t2t = true;
   while (t2tInterrupt) {delay (1);}
-  t2t = true;  
   while(Radio.busy()){}
   feedback(room->node, cmd);
   debug("send command: " + String(cmd));
@@ -2136,8 +2137,8 @@ void hvacOn(uint8_t type, boolean flag) {
 /*                                  Utils                                  */
 /***************************************************************************/
 void updateCurrentRoomTemp() {
-  while (t2t) { delay(5); }  
-  t2tInterrupt = true;  
+  t2tInterrupt = true;
+  while (t2t) { delay(5); }
   room_l[0].roomTempC = (int16_t)ceil(getAverageTemp(&room_l[0]));
   t2tInterrupt = false;
   room_l[0].roomTempF = room_l[0].roomTempC  * 9 / 5 + 32;
