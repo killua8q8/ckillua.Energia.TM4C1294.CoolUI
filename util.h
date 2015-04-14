@@ -20,7 +20,7 @@
 #define DEFAULTHVAC 78
 #define ACMAX 90
 #define ACMIN 50
-#define VREF 3.3
+#define VREF 5.0
 
 extern const uint8_t g_logoImage[];
 extern const uint8_t g_room[];
