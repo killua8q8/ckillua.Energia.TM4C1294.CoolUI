@@ -48,7 +48,6 @@ void setup()
   Serial.begin(115200);
   initAIR();
   initLCD();
-  myScreen.calibrateTouch();
   firstInitialized = firstInit();
   Scheduler.startLoop(updateCurrentRoomTemp);
   Scheduler.startLoop(hvacControl);
@@ -1836,8 +1835,8 @@ void ds_ui_init(char* str, imageButton mu, imageButton du, imageButton yu, image
   myScreen.clear(whiteColour);
   dsts_ui_init(56, "Today's date?");
   mu.draw();  du.draw();  yu.draw();
-  drawTimeDateSetting(64, str);
   md.draw();  dd.draw();  yd.draw();
+  drawTimeDateSetting(64, str);
   ts.draw(true);
 }
 
@@ -2021,10 +2020,11 @@ void initAIR() {
 
 void initLCD() {
   myScreen.begin();
-  myScreen.setOrientation(3);
+  myScreen.setOrientation(1);
   myScreen.setFontSize(myScreen.fontMax());
   myScreen.clear(blackColour);
   opening();
+  myScreen.calibrateTouch();
 }
 
 void deviceTimeInit() {
