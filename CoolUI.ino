@@ -1970,7 +1970,8 @@ void dsts_ui_init(uint8_t x, String text) {
 }
 
 void drawTimeDateSetting(uint8_t x, char* str) {
-  myScreen.rectangle(0, 124, 320, 148, whiteColour);
+  myScreen.setPenSolid(true);
+  myScreen.rectangle(0, 124, 319, 148, whiteColour);
   gText(x, 124, str, blackColour, 3);
 }
 
