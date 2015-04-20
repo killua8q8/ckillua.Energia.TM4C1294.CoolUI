@@ -4,9 +4,9 @@
 #define HOME true
 #define RETURN false
 #define SENSOR PE_1
-#define COOL PN_1  // TODO: finish it
-#define HEAT PN_0  // TODO: finish it
-#define ACFAN PF_4  // TODO: finish it
+#define COOL PK_0  // TODO: finish it
+#define HEAT PB_4  // TODO: finish it
+#define ACFAN PK_2  // TODO: finish it
 #define NEWFAN 0x01
 #define NEWVENT 0x02
 #define NEWBLIND 0x03
