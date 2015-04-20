@@ -650,7 +650,6 @@ float updateChildTemp(roomStruct* room, childStruct child, uint8_t index) {
 boolean childControl(roomStruct* room, childStruct child, uint8_t index) {
   uint8_t count = 0;
   boolean celsius_c = true;
-//  float tmp = updateChildTemp(room, child, index);
   float tmp = getChildTemp(child);
   long current = millis();
   childInfoButton.dDefine(&myScreen, g_infoCImage, xy[count][0], xy[count++][1], setItem(100, "INFO"));
@@ -683,7 +682,6 @@ boolean childControl(roomStruct* room, childStruct child, uint8_t index) {
       return RETURN; 
     }
     if (childInfoButton.check(true)) {
-//      tmp = updateChildTemp(room, child, index);
       tmp = getChildTemp(child);
       celsius_c = !celsius_c;
       resetChildControlUI(child, tmp, celsius_c, 1);
