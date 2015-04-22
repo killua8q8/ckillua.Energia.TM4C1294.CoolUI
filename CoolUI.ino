@@ -708,7 +708,7 @@ boolean childControl(roomStruct* room, childStruct child, uint8_t index) {
 
 void resetChildControlUI(childStruct child, float tmp, boolean c, uint8_t type) {  // type: 0 - update all; 1 - update temp only
   uint8_t x1 = childInfoButton.getX()+28, x2 = childInfoButton.getX()+44, y1 = childInfoButton.getY()+13, y2 = childInfoButton.getY()+36;
-  int16_t t = ceil(3.3 * tmp * 100.0 / 1024.0);
+  int16_t t = ceil(MVREF * tmp * 100.0 / 1024.0);
   uint16_t textColor = myScreen.rgb(77, 132, 171);
   childCommand(child, "STA");
   uint8_t flag = rxPacket.upper;
@@ -1084,7 +1084,9 @@ float getAverageTemp(roomStruct* room) {
     tempF += getChildrenTemp(room);
     count = 1;
   }
-  tempF = (tempF + getLocalTemp()) / (float)++count;
+  float local = getLocalTemp();
+  debug("Local " + String(local));
+  tempF = (tempF + local) / (float)++count;
   return tempF;
 }
 
@@ -1092,13 +1094,13 @@ float getChildrenTemp(roomStruct* room) {
   uint16_t temp = 0, count = 0;
   for (int i = 0; i < room->childSize; i++) {
     float t2 = getChildTemp(room->childList[i]);
-    debug(String(t2));
+    debug(room->childList[i].name + " " + String(t2*100.0*MVREF/1024.0));
     if (t2 > 0) {
       temp += t2;
       count++;
     }
   }
-  return VREF * ((float)temp / count) * 100.0 / 1024.0;
+  return MVREF * ((float)temp / count) * 100.0 / 1024.0;
 }
 
 float getChildTemp(childStruct child) {
@@ -1128,7 +1130,7 @@ float getLocalTemp() {
   val += analogRead(SENSOR);
   val += analogRead(SENSOR);
   val += analogRead(SENSOR);
-  return VREF * ((float)val / 4.0) * 100.0 / 4096.0;
+  return MVREF * ((float)val / 4.0) * 100.0 / 4096.0;
 }
 /********************************************************************************/
 /*                                    Option                                    */

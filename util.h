@@ -3,7 +3,7 @@
 
 #define HOME true
 #define RETURN false
-#define SENSOR PE_1
+#define SENSOR PB_5
 #define COOL PK_0  // TODO: finish it
 #define HEAT PB_4  // TODO: finish it
 #define ACFAN PK_2  // TODO: finish it
@@ -21,6 +21,7 @@
 #define ACMAX 90
 #define ACMIN 50
 #define VREF 5.0
+#define MVREF 3.3
 
 extern const uint8_t g_logoImage[];
 extern const uint8_t g_room[];
